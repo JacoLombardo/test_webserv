@@ -6,16 +6,13 @@
 /*   By: jalombar <jalombar@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/08/08 13:39:54 by jalombar          #+#    #+#             */
-/*   Updated: 2025/08/08 14:16:00 by jalombar         ###   ########.fr       */
+/*   Updated: 2025/08/13 10:49:30 by jalombar         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #ifndef HTTPSERVER_HPP
 #define HTTPSERVER_HPP
 
-//#include "Structs/Connection.hpp"
-//#include "Structs/Response.hpp"
-//#include "Structs/WebServer.hpp"
 #include "includes/Webserv.hpp"
 #include "src/CGI/CGI.hpp"
 #include "src/ConfigParser/ConfigParser.hpp"
