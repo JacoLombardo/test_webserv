@@ -11,6 +11,8 @@
 /* ************************************************************************** */
 
 #include "Connection.hpp"
+#include "src/HttpServer/Structs/WebServer.hpp"
+#include "src/HttpServer/HttpServer.hpp"
 
 Connection::Connection(int socket_fd)
     : fd(socket_fd),

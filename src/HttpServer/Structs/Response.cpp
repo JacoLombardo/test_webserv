@@ -11,6 +11,44 @@
 /* ************************************************************************** */
 
 #include "Response.hpp"
+#include "src/HttpServer/Structs/Connection.hpp"
+#include "src/ConfigParser/ConfigParser.hpp"
+#include "src/HttpServer/HttpServer.hpp"
+
+// Local helpers for MIME detection to avoid depending on WebServer
+static std::string getExtensionForMime(const std::string &path) {
+	std::size_t dot_pos = path.find_last_of('.');
+	std::size_t qm_pos = path.find_first_of('?');
+	if (qm_pos != std::string::npos && dot_pos < qm_pos)
+		return path.substr(dot_pos, qm_pos - dot_pos);
+	else if (qm_pos == std::string::npos && dot_pos != std::string::npos)
+		return path.substr(dot_pos);
+	return "";
+}
+
+static std::string detectContentTypeLocal(const std::string &path) {
+	std::map<std::string, std::string> cTypes;
+	cTypes[".css"] = "text/css";
+	cTypes[".js"] = "application/javascript";
+	cTypes[".html"] = "text/html";
+	cTypes[".htm"] = "text/html";
+	cTypes[".json"] = "application/json";
+	cTypes[".png"] = "image/png";
+	cTypes[".jpg"] = "image/jpeg";
+	cTypes[".jpeg"] = "image/jpeg";
+	cTypes[".gif"] = "image/gif";
+	cTypes[".svg"] = "image/svg+xml";
+	cTypes[".ico"] = "image/x-icon";
+	cTypes[".txt"] = "text/plain";
+	cTypes[".pdf"] = "application/pdf";
+	cTypes[".zip"] = "application/zip";
+
+	std::string ext = getExtensionForMime(path);
+	std::map<std::string, std::string>::const_iterator it = cTypes.find(ext);
+	if (it != cTypes.end())
+		return it->second;
+	return "application/octet-stream";
+}
 
 Logger Response::tmplogg_("Response", Logger::DEBUG);
 
@@ -179,7 +217,7 @@ void Response::initFromCustomErrorPage(uint16_t code, Connection *conn) {
 	errorPage << errorFile.rdbuf();
 	body = errorPage.str();
 	setContentLength(body.length());
-	setContentType(detectContentType(fullPath));
+	setContentType(detectContentTypeLocal(fullPath));
 	errorFile.close();
 	tmplogg_.logWithPrefix(Logger::DEBUG, "Response",
 	                       "Custom error page " + su::to_string(code) + " has been loaded.");

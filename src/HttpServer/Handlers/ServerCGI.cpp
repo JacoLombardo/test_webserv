@@ -10,10 +10,10 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-#include "src/HttpServer/HttpServer.hpp"
+#include "src/HttpServer/Structs/WebServer.hpp"
 #include "src/HttpServer/Structs/Connection.hpp"
 #include "src/HttpServer/Structs/Response.hpp"
-#include "src/HttpServer/Structs/WebServer.hpp"
+#include "src/HttpServer/HttpServer.hpp"
 
 void print_cgi_response(const std::string &cgi_output) {
 	std::istringstream response_stream(cgi_output);

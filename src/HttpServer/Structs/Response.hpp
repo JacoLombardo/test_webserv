@@ -13,9 +13,11 @@
 #ifndef RESPONSE_HPP
 #define RESPONSE_HPP
 
-#include "Connection.hpp"
-#include "WebServer.hpp"
-#include "src/HttpServer/HttpServer.hpp"
+#include "includes/Webserv.hpp"
+#include "src/Logger/Logger.hpp"
+#include "src/Utils/StringUtils.hpp"
+
+class Connection;
 
 class Response {
   public:

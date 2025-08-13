@@ -13,11 +13,12 @@
 #ifndef CONNECTION_HPP
 #define CONNECTION_HPP
 
+#include "includes/Webserv.hpp"
+#include "src/ConfigParser/ConfigParser.hpp"
 #include "Response.hpp"
-#include "WebServer.hpp"
-#include "src/HttpServer/HttpServer.hpp"
 
 class WebServer;
+class Response;
 
 /// Represents a client connection to the web server.
 ///

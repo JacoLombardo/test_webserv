@@ -13,12 +13,11 @@
 #ifndef CGI_HPP
 #define CGI_HPP
 
-#include "HttpServer/Structs/Response.hpp"
-#include "includes/Types.hpp"
 #include "includes/Webserv.hpp"
+#include "includes/Types.hpp"
 #include "src/ConfigParser/ConfigParser.hpp"
-#include "src/HttpServer/HttpServer.hpp"
 #include "src/Logger/Logger.hpp"
+#include "src/HttpServer/Structs/Response.hpp"
 
 class CGI {
   private:

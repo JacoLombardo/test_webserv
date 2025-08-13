@@ -10,10 +10,10 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-#include "HttpServer.hpp"
+#include "src/HttpServer/Structs/WebServer.hpp"
 #include "src/HttpServer/Structs/Connection.hpp"
 #include "src/HttpServer/Structs/Response.hpp"
-#include "src/HttpServer/Structs/WebServer.hpp"
+#include "src/HttpServer/HttpServer.hpp"
 
 time_t WebServer::getCurrentTime() const { return time(NULL); }
 

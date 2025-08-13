@@ -10,10 +10,10 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-#include "src/HttpServer/HttpServer.hpp"
+#include "src/HttpServer/Structs/WebServer.hpp"
 #include "src/HttpServer/Structs/Connection.hpp"
 #include "src/HttpServer/Structs/Response.hpp"
-#include "src/HttpServer/Structs/WebServer.hpp"
+#include "src/HttpServer/HttpServer.hpp"
 
 void WebServer::processEpollEvents(const struct epoll_event *events, int event_count) {
 	for (int i = 0; i < event_count; ++i) {

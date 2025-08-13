@@ -10,10 +10,10 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-#include "src/HttpServer/HttpServer.hpp"
+#include "src/HttpServer/Structs/WebServer.hpp"
 #include "src/HttpServer/Structs/Connection.hpp"
 #include "src/HttpServer/Structs/Response.hpp"
-#include "src/HttpServer/Structs/WebServer.hpp"
+#include "src/HttpServer/HttpServer.hpp"
 
 ssize_t WebServer::prepareResponse(Connection *conn, const Response &resp) {
 	// TODO: some checks if the arguments are fine to work with

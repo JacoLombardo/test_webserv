@@ -10,10 +10,10 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-#include "src/HttpServer/HttpServer.hpp"
+#include "src/HttpServer/Structs/WebServer.hpp"
 #include "src/HttpServer/Structs/Connection.hpp"
 #include "src/HttpServer/Structs/Response.hpp"
-#include "src/HttpServer/Structs/WebServer.hpp"
+#include "src/HttpServer/HttpServer.hpp"
 
 // Serving the index file or listing if possible
 Response WebServer::handleDirectoryRequest(Connection *conn, const std::string &fullDirPath) {
