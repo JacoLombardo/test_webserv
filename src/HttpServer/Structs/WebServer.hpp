@@ -16,6 +16,8 @@
 #include "Connection.hpp"
 #include "Response.hpp"
 #include "src/HttpServer/HttpServer.hpp"
+#include "src/Logger/Logger.hpp"
+#include "includes/Types.hpp"
 
 class ServerConfig; // Still needed to break potential circular dependencies
 class Connection;
@@ -259,8 +261,8 @@ class WebServer {
 	/// \returns Response object containing the requested resource or error.
 	Response handleReturnDirective(Connection *conn, uint16_t code, std::string target);
 
-	std::string getExtension(const std::string &path);
-	std::string detectContentType(const std::string &path);
+	static std::string getExtension(const std::string &path);
+	static std::string detectContentType(const std::string &path);
 
 	/* EpollEventHandler.cpp */
 

@@ -10,10 +10,10 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-#include "src/HttpServer/Structs/Connection.hpp"
-#include "src/HttpServer/HttpServer.hpp"
-#include "src/HttpServer/Structs/Response.hpp"
 #include "src/HttpServer/Structs/WebServer.hpp"
+#include "src/HttpServer/Structs/Connection.hpp"
+#include "src/HttpServer/Structs/Response.hpp"
+#include "src/HttpServer/HttpServer.hpp"
 
 void WebServer::handleNewConnection(ServerConfig *sc) {
 	struct sockaddr_in client_addr;

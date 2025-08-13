@@ -11,6 +11,9 @@
 /* ************************************************************************** */
 
 #include "WebServer.hpp"
+#include "src/HttpServer/Structs/Connection.hpp"
+#include "src/HttpServer/Structs/Response.hpp"
+#include "src/HttpServer/HttpServer.hpp"
 
 bool WebServer::_running;
 static bool interrupted = false;
