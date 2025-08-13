@@ -10,10 +10,10 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-#include "src/HttpServer/Structs/WebServer.hpp"
 #include "src/HttpServer/Structs/Connection.hpp"
-#include "src/HttpServer/Structs/Response.hpp"
 #include "src/HttpServer/HttpServer.hpp"
+#include "src/HttpServer/Structs/Response.hpp"
+#include "src/HttpServer/Structs/WebServer.hpp"
 
 void WebServer::handleNewConnection(ServerConfig *sc) {
 	struct sockaddr_in client_addr;
@@ -89,7 +89,7 @@ void WebServer::handleConnectionTimeout(int client_fd) {
 		prepareResponse(conn, Response(408, conn));
 
 		_lggr.info("Connection timed out for fd: " + su::to_string(client_fd) + " (idle for " +
-		           su::to_string(getCurrentTime() - conn->last_activity) + " seconds)");
+	           su::to_string(getCurrentTime() - conn->last_activity) + " seconds)");
 		closeConnection(conn);
 	}
 }

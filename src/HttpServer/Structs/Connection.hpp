@@ -25,11 +25,6 @@ class Response;
 /// This class manages the state of individual client connections including
 /// connection metadata, request parsing state, response handling, and
 /// keep-alive functionality.
-/// Represents a client connection to the web server.
-///
-/// This class manages the state of individual client connections including
-/// connection metadata, request parsing state, response handling, and
-/// keep-alive functionality.
 class Connection {
 	friend class WebServer;
 
