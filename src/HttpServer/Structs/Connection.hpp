@@ -54,6 +54,7 @@ class Connection {
 	bool response_ready;
 	int request_count;
 
+  public:
 	/// Represents the current state of request processing.
 	enum State {
 		READING_HEADERS,  ///< Reading request headers
@@ -67,7 +68,7 @@ class Connection {
 		CHUNK_COMPLETE         ///< Chunked transfer complete
 	};
 
-	State state;
+	State &stateRef() { return state; }
 
 	/// Constructs a new Connection object.
 	/// \param socket_fd The file descriptor for the client socket.
@@ -96,8 +97,29 @@ class Connection {
 
 	void resetForNewRequest(); // reset locConfig body_bytes_read, ...
 
-  public:
 	ServerConfig *getServerConfig() const { return servConfig; }
+
+	// Public accessors for handlers
+	int getFd() const { return fd; }
+	time_t &lastActivity() { return last_activity; }
+	bool &keepPersistentConnection() { return keep_persistent_connection; }
+	std::string &readBuffer() { return read_buffer; }
+	bool &chunkedFlag() { return chunked; }
+	size_t &chunkSize() { return chunk_size; }
+	size_t &chunkBytesRead() { return chunk_bytes_read; }
+	std::string &chunkData() { return chunk_data; }
+	std::string &headersBuffer() { return headers_buffer; }
+	Response &responseObj() { return response; }
+	bool &responseReady() { return response_ready; }
+	int &requestCount() { return request_count; }
+	LocConfig *&locationConfig() { return locConfig; }
+
+	void publicUpdateActivity() { updateActivity(); }
+	bool publicIsExpired(time_t current_time, int timeout) const { return isExpired(current_time, timeout); }
+	std::string debugString() { return toString(); }
+
+  private:
+	State state;
 };
 
 #endif

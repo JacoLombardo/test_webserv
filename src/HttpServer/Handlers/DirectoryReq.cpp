@@ -10,63 +10,60 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-#include "src/HttpServer/Structs/WebServer.hpp"
-#include "src/HttpServer/Structs/Connection.hpp"
-#include "src/HttpServer/Structs/Response.hpp"
-#include "src/HttpServer/HttpServer.hpp"
+#include "src/HttpServer/Handlers/Handlers.hpp"
 
 // Serving the index file or listing if possible
-Response WebServer::handleDirectoryRequest(Connection *conn, const std::string &fullDirPath) {
-	_lggr.debug("Handling directory request: " + fullDirPath);
+::Response Handlers::Directory::handleDirectoryRequest(WebServer *server, ::Connection *conn, const std::string &fullDirPath) {
+	server->getLogger().debug("Handling directory request: " + fullDirPath);
 
 	// Try to serve index file
-	if (!conn->locConfig->index.empty()) {
-		std::string fullIndexPath = fullDirPath + conn->locConfig->index;
-		_lggr.debug("Trying index file: " + fullIndexPath);
-		if (checkFileType(fullIndexPath.c_str()) == ISREG) {
-			_lggr.debug("Found index file, serving: " + fullIndexPath);
-			return handleFileRequest(conn, fullIndexPath);
+	if (conn->locationConfig() && !conn->locationConfig()->getIndex().empty()) {
+		std::string fullIndexPath = fullDirPath + conn->locationConfig()->getIndex();
+		server->getLogger().debug("Trying index file: " + fullIndexPath);
+		if (server->getFileType(fullIndexPath.c_str()) == ISREG) {
+			server->getLogger().debug("Found index file, serving: " + fullIndexPath);
+			return handleFileRequest(server, conn, fullIndexPath);
 		}
 	}
 
 	// Handle autoindex
-	if (conn->locConfig->autoindex) {
-		_lggr.debug("Autoindex on, generating directory listing");
-		return generateDirectoryListing(conn, fullDirPath);
+	if (conn->locationConfig() && conn->locationConfig()->autoIndexEnabled()) {
+		server->getLogger().debug("Autoindex on, generating directory listing");
+		return generateDirectoryListing(server, conn, fullDirPath);
 	}
 
 	// No index file and no autoindex
-	_lggr.debug("No index file, autoindex disabled");
-	return Response::notFound(conn);
+	server->getLogger().debug("No index file, autoindex disabled");
+	return ::Response::notFound(conn);
 }
 
 // serving the file if found
-Response WebServer::handleFileRequest(Connection *conn, const std::string &fullFilePath) {
-	_lggr.debug("Handling file request: " + fullFilePath);
+::Response Handlers::Directory::handleFileRequest(WebServer *server, ::Connection *conn, const std::string &fullFilePath) {
+	server->getLogger().debug("Handling file request: " + fullFilePath);
 	// Read file content
-	std::string content = getFileContent(fullFilePath);
+	std::string content = server->readFileContent(fullFilePath);
 	if (content.empty()) {
-		_lggr.error("Failed to read file: " + fullFilePath);
-		return Response::internalServerError(conn);
+		server->getLogger().error("Failed to read file: " + fullFilePath);
+		return ::Response::internalServerError(conn);
 	}
 	// Create response
-	Response resp(200, content);
+	::Response resp(200, content);
 	resp.setContentType(detectContentType(fullFilePath));
 	resp.setContentLength(content.length());
-	_lggr.debug("Successfully serving file: " + fullFilePath + " (" +
+	server->getLogger().debug("Successfully serving file: " + fullFilePath + " (" +
 	            su::to_string(content.length()) + " bytes)");
 	return resp;
 }
 
-Response WebServer::handleReturnDirective(Connection *conn, uint16_t code, std::string target) {
+::Response Handlers::Directory::handleReturnDirective(WebServer *server, ::Connection *conn, uint16_t code, std::string target) {
 
-	_lggr.debug("Handling return directive '" + su::to_string(code) + "' to " + target);
+	server->getLogger().debug("Handling return directive '" + su::to_string(code) + "' to " + target);
 	if (code == 0 || target.empty()) {
-		_lggr.error("Problem with the return directive - not properly configured");
-		return Response::internalServerError(conn);
+		server->getLogger().error("Problem with the return directive - not properly configured");
+		return ::Response::internalServerError(conn);
 	}
 
-	Response resp(code);
+	::Response resp(code);
 	resp.setHeader("Location", target);
 	std::ostringstream html;
 	html << "<!DOCTYPE html>\n"
@@ -82,12 +79,12 @@ Response WebServer::handleReturnDirective(Connection *conn, uint16_t code, std::
 	resp.body = html.str();
 	resp.setContentType("text/html");
 	resp.setContentLength(resp.body.length());
-	_lggr.debug("Generated redirect response");
+	server->getLogger().debug("Generated redirect response");
 
 	return resp;
 }
 
-std::string WebServer::detectContentType(const std::string &path) {
+std::string Handlers::Directory::detectContentType(const std::string &path) {
 
 	std::map<std::string, std::string> cTypes;
 	cTypes[".css"] = "text/css";
@@ -112,7 +109,7 @@ std::string WebServer::detectContentType(const std::string &path) {
 	return "application/octet-stream"; // default binary stream
 }
 
-std::string WebServer::getExtension(const std::string &path) {
+std::string Handlers::Directory::getExtension(const std::string &path) {
 	std::size_t dot_pos = path.find_last_of('.');
 	std::size_t qm_pos = path.find_first_of('?');
 	if (qm_pos != std::string::npos && dot_pos < qm_pos)
@@ -127,15 +124,15 @@ std::string WebServer::getExtension(const std::string &path) {
 //     char           d_name[256]; // Name of the entry (file or subdirectory)
 //     unsigned char  d_type;      // Type of entry (optional, not always available)
 // };
-Response WebServer::generateDirectoryListing(Connection *conn, const std::string &fullDirPath) {
-	_lggr.debug("Generating directory listing for: " + fullDirPath);
+::Response Handlers::Directory::generateDirectoryListing(WebServer *server, ::Connection *conn, const std::string &fullDirPath) {
+	server->getLogger().debug("Generating directory listing for: " + fullDirPath);
 
 	// Open directory
 	DIR *dir = opendir(fullDirPath.c_str());
 	if (dir == NULL) {
-		_lggr.error("Failed to open directory: " + fullDirPath + " - " +
-		            std::string(strerror(errno)));
-		return Response::notFound(conn);
+		server->getLogger().error("Failed to open directory: " + fullDirPath + " - " +
+	            std::string(strerror(errno)));
+		return ::Response::notFound(conn);
 	}
 
 	// Generate HTML content
@@ -146,8 +143,7 @@ Response WebServer::generateDirectoryListing(Connection *conn, const std::string
 	    << "<head>\n"
 	    << "<title>Directory Listing - " << fullDirPath << "</title>\n"
 	    << "<style>\n"
-	    << "@import "
-	       "url('https://fonts.googleapis.com/"
+	    << "@import url('https://fonts.googleapis.com/"
 	       "css2?family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&display=swap');\n"
 	    << "body { font-family: 'Space Mono', monospace; background-color: #f8f9fa; margin: 0; "
 	       "padding: 40px; }\n"
@@ -161,7 +157,7 @@ Response WebServer::generateDirectoryListing(Connection *conn, const std::string
 	    << "tr:last-child td { border-bottom: none; }\n"
 	    << "tr:hover { background-color: #f8f9fa; }\n"
 	    << "a { text-decoration: none; color: #007bff; font-weight: 400; }\n"
-	    << "a:hover { text-decoration: underline; color: #0056b3; }\n"
+	    << "a:hover { textDecoration: underline; color: #0056b3; }\n"
 	    << ".dir { color: #ff6b35; font-weight: 700; }\n"
 	    << ".file { color: #28a745; }\n"
 	    << ".size { color: #6c757d; font-size: 0.9em; }\n"
@@ -231,10 +227,10 @@ Response WebServer::generateDirectoryListing(Connection *conn, const std::string
 
 	// Create response
 	std::string body = htmlContent.str();
-	Response resp(200, body);
+	::Response resp(200, body);
 	resp.setContentType("text/html");
 	resp.setContentLength(body.length());
 
-	_lggr.debug("Generated directory listing (" + su::to_string(body.length()) + " bytes)");
+	server->getLogger().debug("Generated directory listing (" + su::to_string(body.length()) + " bytes)");
 	return resp;
 }

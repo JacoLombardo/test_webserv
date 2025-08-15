@@ -14,6 +14,7 @@
 #include "src/HttpServer/Structs/Connection.hpp"
 #include "src/HttpServer/Structs/Response.hpp"
 #include "src/HttpServer/HttpServer.hpp"
+#include "src/HttpServer/Handlers/Handlers.hpp"
 
 bool WebServer::_running;
 static bool interrupted = false;
@@ -83,7 +84,7 @@ void WebServer::run() {
 		}
 
 		if (event_count > 0) {
-			processEpollEvents(events, event_count);
+			Handlers::Epoll::processEpollEvents(this, events, event_count);
 			_lggr.debug("Processed " + su::to_string(event_count) + " events");
 			if (event_count == MAX_EVENTS) {
 				_lggr.warn("Hit MAX_EVENTS limit (" + su::to_string(MAX_EVENTS) +
@@ -91,7 +92,7 @@ void WebServer::run() {
 			}
 		}
 
-		cleanupExpiredConnections();
+		Handlers::Connection::cleanupExpiredConnections(this);
 	}
 
 	for (std::vector<ServerConfig>::iterator it = _confs.begin(); it != _confs.end(); ++it) {
@@ -334,3 +335,24 @@ int main(int argc, char *argv[]) {
 	webserv.run();
 	return 0;
 }
+
+// Accessors and wrappers for handlers
+Logger &WebServer::getLogger() { return _lggr; }
+int WebServer::getEpollFd() const { return _epoll_fd; }
+const std::vector<ServerConfig> &WebServer::getConfigs() const { return _confs; }
+std::vector<ServerConfig> &WebServer::getConfigs() { return _confs; }
+std::map<int, Connection *> &WebServer::getConnections() { return _connections; }
+std::map<int, std::pair<CGI *, Connection *> > &WebServer::getCgiPool() { return _cgi_pool; }
+time_t WebServer::getLastCleanup() const { return _last_cleanup; }
+void WebServer::setLastCleanup(time_t t) { _last_cleanup = t; }
+
+bool WebServer::epollCtl(int op, int socket_fd, uint32_t events) { return epollManage(op, socket_fd, events); }
+bool WebServer::setFdNonBlocking(int fd) { return setNonBlocking(fd); }
+time_t WebServer::now() const { return getCurrentTime(); }
+std::string WebServer::readFileContent(std::string path) { return getFileContent(path); }
+FileType WebServer::getFileType(std::string path) { return checkFileType(path); }
+std::string WebServer::buildLocationFullPath(const std::string &uri, LocConfig *Location) { return buildFullPath(uri, Location); }
+
+int WebServer::getConnectionTimeout() const { return CONNECTION_TO; }
+int WebServer::getCleanupInterval() const { return CLEANUP_INTERVAL; }
+int WebServer::getBufferSize() const { return BUFFER_SIZE; }

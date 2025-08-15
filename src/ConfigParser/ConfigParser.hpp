@@ -176,6 +176,8 @@ class LocConfig {
 	inline std::string getUploadPath() const { return upload_path; }
 
 	inline bool hasReturn() const { return return_code != 0; }
+	inline uint16_t getReturnCode() const { return return_code; }
+	inline const std::string &getReturnTarget() const { return return_target; }
 
 	bool hasMethod(const std::string &method) const {
 		if (allowed_methods.empty())
@@ -202,6 +204,10 @@ class LocConfig {
 		else
 			return "";
 	}
+
+	// Added public helpers used by handlers
+	inline bool autoIndexEnabled() const { return autoindex; }
+	inline const std::string &getIndex() const { return index; }
 };
 
 class ServerConfig {
@@ -236,6 +242,8 @@ class ServerConfig {
 	inline const std::string &getRootPrefix() const {
 		return root_prefix;
 	}; // can probably be removed
+	inline int getServerFd() const { return server_fd; }
+	inline std::vector<LocConfig> &getLocations() { return locations; }
 
 	std::string getErrorPage(uint16_t status) const {
 		std::map<uint16_t, std::string>::const_iterator it = error_pages.find(status);
