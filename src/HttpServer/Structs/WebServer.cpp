@@ -16,6 +16,7 @@
 #include "src/HttpServer/HttpServer.hpp"
 #include "src/HttpServer/Structs/Connection.hpp"
 #include "src/HttpServer/Structs/Response.hpp"
+#include "src/HttpServer/Handlers/Handlers.hpp"
 
 bool WebServer::_running;
 static bool interrupted = false;
@@ -90,7 +91,7 @@ void WebServer::run() {
 		}
 
 		if (event_count > 0) {
-			processEpollEvents(events, event_count);
+			EpollEventHandler::processEpollEvents(this, events, event_count);
 			// _lggr.debug("Processed " + su::to_string(event_count) + " events");
 			if (event_count == MAX_EVENTS) {
 				_lggr.warn("Hit MAX_EVENTS limit (" + su::to_string(MAX_EVENTS) +

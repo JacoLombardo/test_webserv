@@ -58,9 +58,17 @@ SRC_FILES		+= src/ConfigParser/ConfigParser.cpp
 SRC_FILES		+= src/ConfigParser/Handlers/ServerStructure.cpp
 SRC_FILES		+= src/ConfigParser/Handlers/ConfigHelper.cpp
 SRC_FILES		+= src/ConfigParser/Handlers/ValidDirective.cpp
-SRC_FILES		+= src/ConfigParser/Structs/Struct.cpp
+SRC_FILES		+= src/ConfigParser/Structs/LocConfig.cpp
+SRC_FILES		+= src/ConfigParser/Structs/ServerConfig.cpp
 
 SRC_FILES		+= src/Utils/ServerUtils.cpp
+
+SRC_FILES		+= src/HttpServer/Handlers/EpollEventHandlerWrapper.cpp
+SRC_FILES		+= src/HttpServer/Handlers/ConnectionWrapper.cpp
+SRC_FILES		+= src/HttpServer/Handlers/ResponseHandlerWrapper.cpp
+SRC_FILES		+= src/HttpServer/Handlers/RequestWrapper.cpp
+SRC_FILES		+= src/HttpServer/Handlers/ChunkedReqWrapper.cpp
+SRC_FILES		+= src/HttpServer/Handlers/ServerCGIWrapper.cpp
 
 #Object files directory
 OBJ_DIR			:= obj/

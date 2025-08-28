@@ -81,6 +81,7 @@ class WebServer {
 
 	// MEMBER FUNCTIONS
 
+	public:
 	/* HttpServer.cpp */
 
 	/// Sets up signal handlers for graceful server shutdown.
