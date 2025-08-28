@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   WebServer.hpp                                      :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: jalombar <jalombar@student.42.fr>          +#+  +:+       +#+        */
+/*   By: htharrau <htharrau@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/08/08 13:44:09 by jalombar          #+#    #+#             */
-/*   Updated: 2025/08/08 14:29:50 by jalombar         ###   ########.fr       */
+/*   Updated: 2025/08/23 18:30:21 by htharrau         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -15,9 +15,12 @@
 
 #include "Connection.hpp"
 #include "Response.hpp"
+#include "includes/Types.hpp"
+#include "src/ConfigParser/ConfigParser.hpp"
+#include "src/ConfigParser/Struct.hpp"
 #include "src/HttpServer/HttpServer.hpp"
 #include "src/Logger/Logger.hpp"
-#include "includes/Types.hpp"
+#include "src/Utils/ServerUtils.hpp"
 
 class ServerConfig; // Still needed to break potential circular dependencies
 class Connection;
@@ -39,7 +42,7 @@ class WebServer {
 	/// Constructs a WebServer with configurations and a root path prefix.
 	/// \param confs Vector of server configurations to initialize.
 	/// \param prefix_path Root directory prefix for serving files.
-	WebServer(std::vector<ServerConfig> &confs, std::string &prefix_path);
+	WebServer(std::vector<ServerConfig> &confs, std::string &prefix_path, int log_level);
 
 	~WebServer();
 
@@ -52,27 +55,7 @@ class WebServer {
 
 	/// Global flag indicating if the server should continue running.
 	static bool _running;
-
-	// Accessors and helper wrappers for handlers
-	Logger &getLogger();
-	int getEpollFd() const;
-	const std::vector<ServerConfig> &getConfigs() const;
-	std::vector<ServerConfig> &getConfigs();
-	std::map<int, Connection *> &getConnections();
-	std::map<int, std::pair<CGI *, Connection *> > &getCgiPool();
-	time_t getLastCleanup() const;
-	void setLastCleanup(time_t t);
-
-	bool epollCtl(int op, int socket_fd, uint32_t events);
-	bool setFdNonBlocking(int fd);
-	time_t now() const;
-	std::string readFileContent(std::string path);
-	FileType getFileType(std::string path);
-	std::string buildLocationFullPath(const std::string &uri, LocConfig *Location);
-
-	int getConnectionTimeout() const;
-	int getCleanupInterval() const;
-	int getBufferSize() const;
+	int log_level;
 
   private:
 	int _epoll_fd;
@@ -154,6 +137,53 @@ class WebServer {
 	/// Performs cleanup of all server resources and connectioqns.
 	void cleanup();
 
+	/* Request.cpp */
+
+	void processValidRequest(ClientRequest &req, Connection *conn);
+	bool processValidRequestChecks(ClientRequest &req, Connection *conn);
+
+	void handleDirectoryRequest(ClientRequest &req, Connection *conn, bool end_slash);
+	void handleFileRequest(ClientRequest &req, Connection *conn, bool end_slash);
+	bool handleFileSystemErrors(FileType file_type, const std::string &full_path, Connection *conn);
+	bool normalizePath(ClientRequest &req, Connection *conn);
+	bool matchLocation(ClientRequest &req, Connection *conn);
+
+	bool reconstructRequest(Connection *conn);
+
+
+	uint16_t handleCGIRequest(ClientRequest &req, Connection *conn);
+	// bool handleCGIRequest(ClientRequest &req, Connection *conn);
+
+	/// Handles cases where request size exceeds limits.
+	/// \param conn The connection that sent the oversized request.
+	/// \param bytes_read Number of bytes that were read.
+	void handleRequestTooLarge(Connection *conn, ssize_t bytes_read);
+
+	/// Processes a complete HTTP request and prepares response.
+	/// \param conn The connection containing the complete request.
+	/// \returns True if request was processed successfully, false otherwise.
+	bool handleCompleteRequest(Connection *conn);
+
+	/// Checks if complete HTTP headers have been received.
+	/// \param conn The connection to check.
+	/// \returns True if headers are complete, false otherwise.
+	bool isHeadersComplete(Connection *conn);
+
+	/// Determines if a complete HTTP request has been received.
+	/// \param conn The connection to check.
+	/// \returns True if request is complete, false if more data is needed.
+	bool isRequestComplete(Connection *conn);
+
+	/// Parses and processes an HTTP request from connection buffer.
+	/// \param conn The connection containing the request data.
+	void processRequest(Connection *conn);
+
+	/// Parses HTTP request and handles parsing errors.
+	/// \param conn The connection containing request data.
+	/// \param req Reference to ClientRequest object to populate.
+	/// \returns True if parsing succeeded, false otherwise.
+	bool parseRequest(Connection *conn, ClientRequest &req);
+
 	/* ServerUtils.cpp */
 
 	/// Gets the current system time.
@@ -165,8 +195,135 @@ class WebServer {
 	/// \param path The filesystem path to the file.
 	/// \returns File content as string, or empty string on error.
 	std::string getFileContent(std::string path);
-	FileType checkFileType(std::string path);
+	FileType checkFileType(const std::string &path);
 	std::string buildFullPath(const std::string &uri, LocConfig *Location);
+
+	/* Handlers/ChunkedReq.cpp */
+
+	/// Processes chunked transfer encoding chunk size line.
+	/// \param conn The connection receiving chunked data.
+	/// \returns True if chunk size was successfully parsed, false otherwise.
+	bool processChunkSize(Connection *conn);
+
+	/// Processes chunked transfer encoding data chunks.
+	/// \param conn The connection receiving chunked data.
+	/// \returns True if chunk data was processed successfully, false otherwise.
+	bool processChunkData(Connection *conn);
+
+	/// Processes trailing headers in chunked transfer encoding.
+	/// \param conn The connection receiving chunked data.
+	/// \returns True if trailer was processed successfully, false otherwise.
+	bool processTrailer(Connection *conn);
+
+	/// Reconstructs a complete request from chunked transfer encoding.
+	/// \param conn The connection that received chunked data.
+	void reconstructChunkedRequest(Connection *conn);
+
+	/* Handlers/ServerCGI.cpp */
+	bool prepareCGIResponse(CGI *cgi, Connection *conn);
+	void handleCGIOutput(int fd);
+	bool isCGIFd(int fd) const;
+
+	/* Handlers/Connection.cpp */
+
+	void updateConnectionActivity(int client_fd);
+
+	/// Accepts a new client connection and adds it to the connection pool.
+	/// \param sc Pointer to the server configuration that received the connection.
+	void handleNewConnection(ServerConfig *sc);
+
+	/// Creates and registers a new client connection.
+	/// \param client_fd The client socket file descriptor.
+	/// \param sc The configuaration struct for the matching host:port server
+	/// \returns Pointer to the newly created Connection object.
+	Connection *addConnection(int client_fd, ServerConfig *sc);
+
+	/// Closes expired connections to free resources.
+	void cleanupExpiredConnections();
+
+	/// Handles connection timeout by preparing appropriate response.
+	/// \param client_fd The file descriptor of the timed-out connection.
+	void handleConnectionTimeout(int client_fd);
+
+	/// Gracefully closes a client connection.
+	/// \param conn Pointer to the connection to close.
+	void closeConnection(Connection *conn);
+
+	/* Handlers/DirectoryReq.cpp */
+
+	/// Prepares response data when a directory is requested
+	/// \param conn The connection to send response to.
+	/// \param dir_path The response object containing the path
+	/// \returns Response object containing the requested resource or error.
+	Response respDirectoryRequest(Connection *conn, const std::string &fullDirPath);
+
+	/// Prepares response data for transmission to client : directory listing
+	/// \param conn The connection to send response to.
+	/// \param fullDirPath The response object containing the file directory.
+	/// \returns Response object containing the requested resource or error.
+	Response generateDirectoryListing(Connection *conn, const std::string &fullDirPath);
+
+	/// Prepares response data for transmission of a file to client
+	/// \param conn The connection to send response to.
+	/// \param dir_path The full path to the file to send.
+	/// \returns Response object containing the requested resource or error.
+	Response respFileRequest(Connection *conn, const std::string &fullFilePath);
+
+	/// Handles Return directives
+	/// \param req The GET request to process.
+	/// \param code The status code to send back.
+	/// \param target The uri or url to send.
+	/// \returns Response object containing the requested resource or error.
+	Response respReturnDirective(Connection *conn, uint16_t code, std::string target);
+
+	/* EpollEventHandler.cpp */
+
+	/// Processes events returned by epoll_wait.
+	/// \param events Array of epoll events to process.
+	/// \param event_count Number of events in the array.
+	void processEpollEvents(const struct epoll_event *events, int event_count);
+
+	/// Determines if a file descriptor belongs to a listening socket.
+	/// \param fd The file descriptor to check.
+	/// \returns True if fd is a listening socket, false otherwise.
+	bool isListeningSocket(int fd) const;
+
+	/// Handles epoll events for client connections.
+	/// \param fd The client file descriptor.
+	/// \param event_mask The epoll event mask indicating event types.
+	void handleClientEvent(int fd, uint32_t event_mask);
+
+	/// Handles receiving data from a client connection.
+	/// \param conn The connection to receive data from.
+	void handleClientRecv(Connection *conn);
+
+	/// Receives data from client socket with error handling.
+	/// \param client_fd The client socket file descriptor.
+	/// \param buffer Buffer to store received data.
+	/// \param buffer_size Size of the receive buffer.
+	/// \returns Number of bytes received, or negative value on error.
+	ssize_t receiveData(int client_fd, char *buffer, size_t buffer_size);
+
+	/// Processes received data and determines if request is complete.
+	/// \param conn The connection that received data.
+	/// \param buffer The buffer containing received data.
+	/// \param bytes_read Number of bytes received in this call.
+	/// \param total_bytes_read Total bytes received for this request.
+	/// \returns True if processing succeeded, false on error.
+	bool processReceivedData(Connection *conn, const char *buffer, ssize_t bytes_read);
+
+	/* Handlers/MethodsHandler.cpp */
+
+	/// Prepares response data for transmission to client.
+	/// \param conn The connection to send response to.
+	/// \param resp The response object containing response data.
+	/// \returns Number of bytes prepared for sending, or negative on error.
+	ssize_t prepareResponse(Connection *conn, const Response &resp);
+
+	/// Sends prepared response data to client.
+	/// \param conn The connection to send response to.
+	/// \returns True if response was sent successfully, false otherwise.
+	bool sendResponse(Connection *conn);
 };
 
 #endif

@@ -6,7 +6,7 @@
 /*   By: jalombar <jalombar@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/07/31 08:58:57 by jalombar          #+#    #+#             */
-/*   Updated: 2025/08/08 14:22:56 by jalombar         ###   ########.fr       */
+/*   Updated: 2025/08/20 15:22:00 by jalombar         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -15,9 +15,10 @@
 
 #include "includes/Webserv.hpp"
 #include "includes/Types.hpp"
-#include "src/ConfigParser/ConfigParser.hpp"
+#include "src/ConfigParser/Struct.hpp"
 #include "src/Logger/Logger.hpp"
 #include "src/HttpServer/Structs/Response.hpp"
+#include "src/Utils/ServerUtils.hpp"
 
 class CGI {
   private:
@@ -46,22 +47,11 @@ class CGI {
 	pid_t getPid() const;
 	void setOutputFd(int fd);
 	int getOutputFd() const;
-
-	// CGI handler
-	void printCGIResponse(const std::string &cgi_output);
-	std::string extractContentType(std::string &cgi_headers);
-	bool cleanup();
-
-	void sendCGIResponse(std::string &cgi_output, int clfd);
-	bool sendNormalResp(CGI &cgi, int clfd);
-	void sendChunk(int clfd, const char *data, size_t size);
-	bool sendCGIHeaders(CGI &cgi, int clfd, std::string &first_chunk, std::string &remaining_data);
-	bool sendChunkedResp(CGI &cgi, int clfd);
 };
 
 namespace CGIUtils {
-bool runCGIScript(ClientRequest &req, CGI &cgi);
-CGI *createCGI(ClientRequest &req, LocConfig *locConfig);
+uint16_t runCGIScript(ClientRequest &req, CGI &cgi);
+uint16_t createCGI(CGI *&cgi, ClientRequest &req, LocConfig *locConfig);
 } // namespace CGIUtils
 
 #endif

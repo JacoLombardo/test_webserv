@@ -6,20 +6,20 @@
 /*   By: jalombar <jalombar@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/07/31 10:18:53 by jalombar          #+#    #+#             */
-/*   Updated: 2025/08/08 10:36:27 by jalombar         ###   ########.fr       */
+/*   Updated: 2025/08/20 12:16:48 by jalombar         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "CGI.hpp"
 
-bool CGIUtils::runCGIScript(ClientRequest &req, CGI &cgi) {
+uint16_t CGIUtils::runCGIScript(ClientRequest &req, CGI &cgi) {
 	Logger logger;
 
 	// 2. Creates char **envp
 	char **envp = cgi.toEnvp();
 	if (!envp) {
 		logger.logWithPrefix(Logger::ERROR, "CGI", "Failed to create environment");
-		return (false);
+		return (502);
 	}
 
 	// 3. Create pipes with error checking
@@ -27,7 +27,7 @@ bool CGIUtils::runCGIScript(ClientRequest &req, CGI &cgi) {
 	if (pipe(input_pipe) == -1) {
 		logger.logWithPrefix(Logger::ERROR, "CGI", "Failed to create input pipe");
 		cgi.freeEnvp(envp);
-		return (false);
+		return (502);
 	}
 
 	if (pipe(output_pipe) == -1) {
@@ -35,7 +35,7 @@ bool CGIUtils::runCGIScript(ClientRequest &req, CGI &cgi) {
 		close(input_pipe[0]);
 		close(input_pipe[1]);
 		cgi.freeEnvp(envp);
-		return (false);
+		return (502);
 	}
 	cgi.setOutputFd(output_pipe[0]);
 
@@ -49,7 +49,7 @@ bool CGIUtils::runCGIScript(ClientRequest &req, CGI &cgi) {
 		close(output_pipe[0]);
 		close(output_pipe[1]);
 		cgi.freeEnvp(envp);
-		return (false);
+		return (502);
 	}
 
 	if (pid == 0) {
@@ -62,6 +62,9 @@ bool CGIUtils::runCGIScript(ClientRequest &req, CGI &cgi) {
 		close(output_pipe[0]);
 		close(input_pipe[0]);
 		close(output_pipe[1]);
+
+		// Set alarm for timeout
+		alarm(10);
 
 		// Execute the CGI script
 		char *argv[] = {(char *)cgi.getInterpreter(), (char *)cgi.getScriptPath(), NULL};
@@ -78,25 +81,6 @@ bool CGIUtils::runCGIScript(ClientRequest &req, CGI &cgi) {
 	// Free environment in parent (child has its own copy after fork)
 	cgi.freeEnvp(envp);
 
-	usleep(10000); // 10ms delay to let execve complete or fail
-
-	// Check if execve failed
-	int status;
-	pid_t wait_result = waitpid(pid, &status, WNOHANG);
-	if (wait_result > 0) {
-		// Child exited immediately - execve likely failed
-		logger.logWithPrefix(Logger::ERROR, "CGI", "CGI script failed to execute");
-		close(input_pipe[1]);
-		close(output_pipe[0]);
-		return (false);
-	} else if (wait_result == -1) {
-		// waitpid error
-		logger.logWithPrefix(Logger::ERROR, "CGI", "Error checking child process status");
-		close(input_pipe[1]);
-		close(output_pipe[0]);
-		return (false);
-	}
-
 	// 6. Send POST data if any
 	if (req.method == "POST") {
 		logger.logWithPrefix(Logger::INFO, "CGI", "Handling POST request");
@@ -109,28 +93,53 @@ bool CGIUtils::runCGIScript(ClientRequest &req, CGI &cgi) {
 					logger.logWithPrefix(Logger::WARNING, "CGI",
 					                     "Failed to write request body to CGI script");
 					close(input_pipe[1]);
-					return (false);
+					return (502);
 				};
 				total_written += written;
 			}
 		}
 	}
 	close(input_pipe[1]);
-	return (true);
+
+	// Check if execve failed
+	int status;
+	pid_t wait_result = waitpid(pid, &status, 0);
+	if (wait_result > 0) {
+		// Child exited immediately - execve likely failed
+		if (WIFSIGNALED(status) && WTERMSIG(status) == SIGALRM) {
+			logger.logWithPrefix(Logger::ERROR, "CGI", "CGI script timeout");
+			close(output_pipe[0]);
+			return (504);
+		} else if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
+			// Child exits sucessfully
+			return (0);
+		} else {
+			// Child exits with non-zero exit code OR killed by some other signal
+			logger.logWithPrefix(Logger::ERROR, "CGI", "CGI script failed to execute");
+			close(output_pipe[0]);
+			return (502);
+		}
+	} else if (wait_result == -1) {
+		// waitpid error
+		logger.logWithPrefix(Logger::ERROR, "CGI", "Error checking child process status");
+		close(output_pipe[0]);
+		return (502);
+	}
+	return (0);
 }
 
-CGI *CGIUtils::createCGI(ClientRequest &req, LocConfig *locConfig) {
+uint16_t CGIUtils::createCGI(CGI *&cgi, ClientRequest &req, LocConfig *locConfig) {
 	Logger logger;
 	// 1. Validate and construct script path
 	if (req.path.empty() || req.path.find("..") != std::string::npos) {
 		logger.logWithPrefix(Logger::WARNING, "CGI", "Invalid or potentially unsafe path");
-		return (NULL);
+		return (502);
 	}
 
 	// Heap allocated
-	CGI *cgi = new CGI(req, locConfig);
-	if (!runCGIScript(req, *cgi))
-		return (NULL);
-
-	return (cgi);
+	cgi = new CGI(req, locConfig);
+	uint16_t exit_code = runCGIScript(req, *cgi);
+	if (exit_code)
+		return (exit_code);
+	return (0);
 }

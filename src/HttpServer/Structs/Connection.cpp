@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   Connection.cpp                                     :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: jalombar <jalombar@student.42.fr>          +#+  +:+       +#+        */
+/*   By: htharrau <htharrau@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/08/08 13:41:32 by jalombar          #+#    #+#             */
-/*   Updated: 2025/08/08 13:42:22 by jalombar         ###   ########.fr       */
+/*   Updated: 2025/08/25 14:21:39 by htharrau         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -17,11 +17,15 @@
 Connection::Connection(int socket_fd)
     : fd(socket_fd),
       keep_persistent_connection(true),
+      body_bytes_read(0),
+      content_length(-1),
       chunked(false),
       chunk_size(0),
       chunk_bytes_read(0),
+	  cgi_response(""),
       response_ready(false),
       request_count(0),
+      should_close(0),
       state(READING_HEADERS) {
 	updateActivity();
 }
@@ -39,24 +43,22 @@ void Connection::resetChunkedState() {
 
 std::string Connection::stateToString(Connection::State state) {
 	switch (state) {
-	case Connection::READING_HEADERS:
-		return "READING_HEADERS";
-	case Connection::READING_CHUNK_SIZE:
-		return "READING_CHUNK_SIZE";
-	case Connection::READING_CHUNK_DATA:
-		return "READING_CHUNK_DATA";
-	case Connection::READING_CHUNK_TRAILER:
-		return "READING_CHUNK_TRAILER";
-	case Connection::CONTINUE_SENT:
-		return "CONTINUE_SENT";
-	case Connection::READING_TRAILER:
-		return "READING_FINAL_TRAILER";
-	case Connection::CHUNK_COMPLETE:
-		return "CHUNK_COMPLETE";
-	case Connection::REQUEST_COMPLETE:
-		return "REQUEST_COMPLETE";
-	default:
-		return "UNKNOWN_STATE";
+		case Connection::READING_HEADERS:
+			return "READING_HEADERS";
+		case Connection::READING_CHUNK_SIZE:
+			return "READING_CHUNK_SIZE";
+		case Connection::READING_CHUNK_DATA:
+			return "READING_CHUNK_DATA";
+		case Connection::READING_CHUNK_TRAILER:
+			return "READING_CHUNK_TRAILER";
+		case Connection::READING_TRAILER:
+			return "READING_FINAL_TRAILER";
+		case Connection::CHUNK_COMPLETE:
+			return "CHUNK_COMPLETE";
+		case Connection::REQUEST_COMPLETE:
+			return "REQUEST_COMPLETE";
+		default:
+			return "UNKNOWN_STATE";
 	}
 }
 

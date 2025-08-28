@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   RequestLine.cpp                                    :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: jalombar <jalombar@student.42.fr>          +#+  +:+       +#+        */
+/*   By: htharrau <htharrau@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/06/25 10:33:32 by jalombar          #+#    #+#             */
-/*   Updated: 2025/08/07 14:18:14 by jalombar         ###   ########.fr       */
+/*   Updated: 2025/08/23 22:44:53 by htharrau         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -66,6 +66,10 @@ bool decodeNValidateUri(const std::string &uri, std::string &decoded) {
 			if (uch > 0x7E)
 				return (false);
 
+			// CRLF injection prevention
+			if (ch == '\r' || ch == '\n')
+				return (false);
+
 			decoded += ch;
 		}
 	}
@@ -73,58 +77,102 @@ bool decodeNValidateUri(const std::string &uri, std::string &decoded) {
 	return (true);
 }
 
+// Additional function to validate query parameters specifically
+bool validateQueryString(const std::string &query) {
+	for (size_t i = 0; i < query.length(); ++i) {
+		unsigned char ch = static_cast<unsigned char>(query[i]);
+		
+		// Check for non-ASCII characters
+		if (ch > 0x7E)
+			return false;
+			
+		// Check for unescaped control characters
+		if (ch <= 0x1F || ch == 0x7F)
+			return false;
+			
+		// CRLF injection prevention
+		if (ch == '\r' || ch == '\n')
+			return false;
+	}
+	return true;
+}
+
 /* Checks */
-bool RequestParsingUtils::checkReqLine(ClientRequest &request) {
-	Logger logger;
+uint16_t RequestParsingUtils::checkReqLine(ClientRequest &request, Logger &logger) {
 
 	if (request.method.empty() || request.uri.empty() || request.version.empty()) {
 		logger.logWithPrefix(Logger::WARNING, "HTTP", "Empty component in request line");
-		return (false);
+		return 400;
+	}
+
+	// CRLF injection check in method, uri, version
+	if (request.method.find('\r') != std::string::npos || 
+	    request.method.find('\n') != std::string::npos ||
+	    request.uri.find('\r') != std::string::npos ||
+	    request.uri.find('\n') != std::string::npos ||
+	    request.version.find('\r') != std::string::npos ||
+	    request.version.find('\n') != std::string::npos) {
+		logger.logWithPrefix(Logger::WARNING, "HTTP", "CRLF injection attempt detected");
+		return 400;
 	}
 
 	if (request.method.find(' ') != std::string::npos ||
 	    request.uri.find(' ') != std::string::npos ||
 	    request.version.find(' ') != std::string::npos) {
 		logger.logWithPrefix(Logger::WARNING, "HTTP", "Extra spaces in request line");
-		return (false);
+		return 400;
+	}
+
+	if (request.method != "POST" && request.method != "GET" && request.method != "DELETE") {
+		logger.logWithPrefix(Logger::WARNING, "HTTP", "Unsupported HTTP method: " + request.method);
+		return 501;
 	}
 
 	if (request.uri.length() > MAX_URI_LENGTH) {
 		logger.logWithPrefix(Logger::WARNING, "HTTP", "Uri too big");
-		return (false);
+		return 414;
 	}
+	
 	std::string decoded_uri;
 	if (!decodeNValidateUri(request.uri, decoded_uri)) {
 		logger.logWithPrefix(Logger::WARNING, "HTTP", "Invalid uri");
-		return (false);
+		return 400;
 	}
 	request.uri = decoded_uri;
+	
 	size_t qm = request.uri.find_first_of('?');
 	if (qm != std::string::npos) {
 		request.path = request.uri.substr(0, qm);
 		request.query = request.uri.substr(qm + 1);
+		
+		// Validate query string for non-ASCII characters
+		if (!validateQueryString(request.query)) {
+			logger.logWithPrefix(Logger::WARNING, "HTTP", "Invalid characters in query string");
+			return 400;
+		}
 	} else {
 		request.path = request.uri;
 		request.query = "";
 	}
-
+	
+	// case 505: "HTTP Version Not Supported"
 	if (request.version != "HTTP/1.1") {
 		logger.logWithPrefix(Logger::WARNING, "HTTP", "Invalid HTTP version");
-		return (false);
+		return 505;
 	}
 
-	return (true);
+	return 0;
 }
 
 /* Parsing */
-bool RequestParsingUtils::parseReqLine(std::istringstream &stream, ClientRequest &request) {
-	Logger logger;
+uint16_t RequestParsingUtils::parseReqLine(std::istringstream &stream, ClientRequest &request,
+                                           Logger &logger) {
 	std::string line;
 	logger.logWithPrefix(Logger::DEBUG, "HTTP", "Parsing request line");
 
 	if (!std::getline(stream, line)) {
 		logger.logWithPrefix(Logger::WARNING, "HTTP", "No request line present");
-		return (false);
+		return 400;
 	}
 
 	if (!line.empty() && line[line.length() - 1] == '\r')
@@ -136,26 +184,26 @@ bool RequestParsingUtils::parseReqLine(std::istringstream &stream, ClientRequest
 	size_t first_space = trimmed_line.find(' ');
 	if (first_space == std::string::npos) {
 		logger.logWithPrefix(Logger::WARNING, "HTTP", "Request line missing spaces");
-		return (false);
+		return 400;
 	}
 
 	size_t second_space = trimmed_line.find(' ', first_space + 1);
 	if (second_space == std::string::npos) {
 		logger.logWithPrefix(Logger::WARNING, "HTTP", "Invalid request line format");
-		return (false);
+		return 400;
 	}
 
 	// Check for extra spaces between components
 	if (first_space == 0 || second_space == first_space + 1) {
 		logger.logWithPrefix(Logger::WARNING, "HTTP",
 		                     "Extra spaces between request line components");
-		return (false);
+		return 400;
 	}
 
 	// Check for trailing spaces or extra spaces after version
 	if (trimmed_line.find(' ', second_space + 1) != std::string::npos) {
 		logger.logWithPrefix(Logger::WARNING, "HTTP", "Extra spaces after HTTP version");
-		return (false);
+		return 400;
 	}
 
 	// Manual parsing to ensure exactly one space between components
@@ -163,5 +211,5 @@ bool RequestParsingUtils::parseReqLine(std::istringstream &stream, ClientRequest
 	request.uri = trimmed_line.substr(first_space + 1, second_space - first_space - 1);
 	request.version = trimmed_line.substr(second_space + 1);
 
-	return (RequestParsingUtils::checkReqLine(request));
+	return (RequestParsingUtils::checkReqLine(request, logger));
 }

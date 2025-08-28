@@ -1,43 +1,35 @@
-import cgitb
-import html
-import re
-import urllib.parse
 import os
+import sys
+import re
+from html import escape
 
-# Enable CGI error reporting
-cgitb.enable()
-
-# Default name if none provided
+# Default values
 name = 'Guest'
+exit_code = '200'
 
-# Get query parameters
+# Get query parameters from environment variables
 query_string = os.environ.get('QUERY_STRING', '')
-params = urllib.parse.parse_qs(query_string)
 
-# Check if 'name' is set in the URL query parameters
-if 'name' in params:
-	# Remove leading/trailing whitespace
-	name = params['name'][0].strip()
-	
-	# Limit the name to 50 characters to avoid abuse or layout issues
-	if len(name) > 50:
-		name = name[:50]
-	
-	# Allow only letters, numbers, spaces, periods, apostrophes, and hyphens
-	# Using \w for Unicode letters/numbers plus space, ., ', -
-	# Excluding underscore manually
-	if not re.match(r'^[\w .\'\-]+$', name, re.UNICODE) or '_' in name:
-		name = 'Guest'  # Reset to default if input is invalid
-	
-	# Convert special HTML characters to safe entities (e.g., < becomes &lt;)
-	# Prevents Cross-Site Scripting (XSS)
-	name = html.escape(name)
+# Parse query parameters
+if query_string:
+	params = dict(pair.split('=') for pair in query_string.split('&') if '=' in pair)
+	if 'name' in params:
+		# Remove leading/trailing whitespace
+		name = params['name'].strip()
+		
+		# Limit to 50 characters
+		if len(name) > 50:
+			name = name[:50]
+		
+		# Allow only letters, numbers, spaces, periods, apostrophes, and hyphens
+		if not re.match(r'^[\w .\'-]+$', name, re.UNICODE):
+			name = 'Guest'
+		
+		# Escape HTML special characters
+		name = escape(name)
 
-# Print HTTP headers
-print("Content-Type: text/html\n")
-
-# Print HTML content
-print(f"""<!DOCTYPE html>
+# Generate HTML content
+html_content = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
 	<meta charset="UTF-8" />
@@ -62,4 +54,14 @@ print(f"""<!DOCTYPE html>
 		</div>
 	</div>
 </body>
-</html>""")
+</html>"""
+
+# Calculate content length
+content_length = len(html_content.encode('utf-8'))
+
+# Send exit_code
+print(f"{exit_code}\r\n", end="")
+print("\r")
+
+# Send content
+print(html_content)

@@ -1,110 +1,42 @@
+import os
+import sys
+import html
+import re
 import cgi
 import cgitb
-import html
-import os
-import re
-import shutil
-import time
 from datetime import datetime
-from pathlib import Path
+import tempfile
+import shutil
 
-# Enable CGI error reporting
-cgitb.enable()
-
+# Get environment variables
 upload_dir = os.environ.get('UPLOAD_DIR', './uploads/')
-if not upload_dir.endswith('/'):
-	upload_dir += '/'
+request_method = os.environ.get('REQUEST_METHOD', 'GET')
+content_length = int(os.environ.get('CONTENT_LENGTH', '0'))
 
-# Create upload directory if it doesn't exist
-Path(upload_dir).mkdir(mode=0o755, parents=True, exist_ok=True)
+# Ensure upload directory exists
+if not os.path.exists(upload_dir):
+	os.makedirs(upload_dir, 0o755)
 
 uploaded = False
 filename = ''
 filesize = 0
 file_extension = ''
 error_message = ''
+exit_code = '200'
 
-# Create FieldStorage instance to parse form data
-form = cgi.FieldStorage()
-
-if os.environ.get('REQUEST_METHOD') == 'POST' and 'file' in form:
-	# Get uploaded file
-	uploaded_file = form['file']
-	
-	# Check if file was uploaded successfully
-	if uploaded_file.filename and uploaded_file.file:
-		# Sanitize filename
-		filename = os.path.basename(uploaded_file.filename)
-		filename = re.sub(r'[^a-zA-Z0-9._-]', '', filename)
-		
-		if not filename:
-			filename = f'uploaded_file_{int(time.time())}'
-		
-		# Get file extension for icon
-		file_extension = os.path.splitext(filename)[1].lower().lstrip('.')
-		
-		# Handle duplicate filenames by appending (1), (2), etc.
-		base_name, extension = os.path.splitext(filename)
-		
-		counter = 0
-		new_filename = filename
-		target_path = upload_dir + new_filename
-		
-		while os.path.exists(target_path):
-			counter += 1
-			new_filename = f"{base_name}({counter}){extension}"
-			target_path = upload_dir + new_filename
-		
-		filename = new_filename
-		
-		# Move uploaded file
-		try:
-			with open(target_path, 'wb') as f:
-				shutil.copyfileobj(uploaded_file.file, f)
-			uploaded = True
-			filesize = os.path.getsize(target_path)
-		except Exception as e:
-			error_message = f'Unable to upload the file: {str(e)}'
-	else:
-		error_message = 'Unable to upload the file'
-
-# Function to get file icon based on extension
 def get_file_icon(extension):
 	icons = {
-		'pdf': '📄',
-		'doc': '📝',
-		'docx': '📝',
-		'txt': '📄',
-		'jpg': '🖼️',
-		'jpeg': '🖼️',
-		'png': '🖼️',
-		'gif': '🖼️',
-		'svg': '🖼️',
-		'mp4': '🎬',
-		'avi': '🎬',
-		'mov': '🎬',
-		'mp3': '🎵',
-		'wav': '🎵',
-		'zip': '🗜️',
-		'rar': '🗜️',
-		'tar': '🗜️',
-		'gz': '🗜️',
-		'html': '🌐',
-		'css': '🎨',
-		'js': '⚡',
-		'php': '🐘',
-		'py': '🐍',
-		'cpp': '⚙️',
-		'c': '⚙️',
-		'java': '☕',
-		'json': '📋',
-		'xml': '📋',
-		'csv': '📊',
-		'xls': '📊',
-		'xlsx': '📊'
+		'pdf': '📄', 'doc': '📝', 'docx': '📝', 'txt': '📄',
+		'jpg': '🖼️', 'jpeg': '🖼️', 'png': '🖼️', 'gif': '🖼️', 'svg': '🖼️',
+		'mp4': '🎬', 'avi': '🎬', 'mov': '🎬',
+		'mp3': '🎵', 'wav': '🎵',
+		'zip': '🗜️', 'rar': '🗜️', 'tar': '🗜️', 'gz': '🗜️',
+		'html': '🌐', 'css': '🎨', 'js': '⚡', 'php': '🐘', 'py': '🐍',
+		'cpp': '⚙️', 'c': '⚙️', 'java': '☕',
+		'json': '📋', 'xml': '📋',
+		'csv': '📊', 'xls': '📊', 'xlsx': '📊'
 	}
-	
-	return icons.get(extension, '📁')
+	return icons.get(extension.lower(), '📁')
 
 def format_file_size(bytes_size):
 	if bytes_size >= 1073741824:
@@ -116,29 +48,92 @@ def format_file_size(bytes_size):
 	else:
 		return f"{bytes_size} bytes"
 
-if error_message:
+def log_error(message):
 	try:
-		with open('../../script.log', 'a') as stderr:
-			stderr.write(f"{datetime.now().isoformat()} {error_message}\n")
+		with open('script.log', 'a') as log_file:
+			timestamp = datetime.now().isoformat()
+			log_file.write(f"{timestamp} {message}\n")
 	except:
-		pass
+		pass  # Ignore logging errors
 
-# Print HTTP headers
-print("Content-Type: text/html\n")
+# Handle file upload
+if request_method == 'POST' and content_length > 0:
+	try:
+		# Create FieldStorage instance to parse form data
+		form = cgi.FieldStorage()
+		
+		if 'file' in form:
+			fileitem = form['file']
+			
+			if fileitem.filename:
+				# Sanitize filename
+				filename = os.path.basename(fileitem.filename)
+				filename = re.sub(r'[^a-zA-Z0-9._-]', '', filename)
+				
+				if not filename:
+					filename = f'uploaded_file_{int(datetime.now().timestamp())}'
+				
+				# Get file extension
+				file_extension = os.path.splitext(filename)[1][1:].lower()
+				
+				# Handle duplicate filenames
+				base_name, ext = os.path.splitext(filename)
+				counter = 0
+				new_filename = filename
+				target_path = os.path.join(upload_dir, new_filename)
+				
+				while os.path.exists(target_path):
+					counter += 1
+					new_filename = f"{base_name}({counter}){ext}"
+					target_path = os.path.join(upload_dir, new_filename)
+				
+				filename = new_filename
+				
+				# Save uploaded file
+				try:
+					with open(target_path, 'wb') as f:
+						if hasattr(fileitem.file, 'read'):
+							shutil.copyfileobj(fileitem.file, f)
+						else:
+							f.write(fileitem.file)
+					
+					uploaded = True
+					filesize = os.path.getsize(target_path)
+					exit_code = '201'
+					
+				except Exception as e:
+					error_message = 'Unable to save file'
+					exit_code = '502'
+			else:
+				error_message = 'No file uploaded'
+				exit_code = '400'
+		else:
+			error_message = 'No file field found'
+			exit_code = '400'
+			
+	except Exception as e:
+		error_message = f'Upload processing error: {str(e)}'
+		exit_code = '502'
+		
+elif request_method != 'POST':
+	error_message = 'Invalid request method'
+	exit_code = '405'
 
-# Get existing files
+if error_message:
+	log_error(error_message)
+
+# Get existing files in upload directory
 existing_files = []
 if os.path.isdir(upload_dir):
 	try:
-		files = os.listdir(upload_dir)
-		for file in files:
+		for file in os.listdir(upload_dir):
 			file_path = os.path.join(upload_dir, file)
 			if os.path.isfile(file_path):
 				existing_files.append(file)
 	except:
 		pass
 
-# Generate HTML
+# Build HTML content
 html_content = f'''<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -164,10 +159,8 @@ if uploaded:
 		</div>
 		<h1 class="title">File "{html.escape(filename)}" successfully uploaded!</h1>
 		<p class="subtitle">
-			Size: {format_file_size(filesize)}'''
-	if file_extension:
-		html_content += f''' | Type: {file_extension.upper()}'''
-	html_content += '''
+			Size: {format_file_size(filesize)}
+			{f"| Type: {file_extension.upper()}" if file_extension else ""}
 		</p>'''
 else:
 	html_content += '''
@@ -189,10 +182,10 @@ if existing_files:
 			<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 1rem; margin-bottom: 2rem;">'''
 	
 	for file in existing_files:
-		file_ext = os.path.splitext(file)[1].lower().lstrip('.')
+		file_ext = os.path.splitext(file)[1][1:].lower()
 		file_path = os.path.join(upload_dir, file)
 		try:
-			file_size = os.path.getsize(file_path) if os.path.exists(file_path) else 0
+			file_size = os.path.getsize(file_path)
 		except:
 			file_size = 0
 		display_name = file[:12] + '...' if len(file) > 15 else file
@@ -201,6 +194,7 @@ if existing_files:
 				<div style="position: relative; text-align: center; padding: 1rem; background: rgba(255,255,255,0.1); border-radius: 12px; backdrop-filter: blur(10px);">
 					<form method="POST" action="delete.py" style="position: absolute; top: 8px; right: 8px; margin: 0;">
 						<input type="hidden" name="filename" value="{html.escape(file)}">
+						<input type="hidden" name="_method" value="DELETE">
 						<button type="submit" 
 								style="background: rgba(255,0,0,0.7); color: white; border: none; border-radius: 50%; width: 20px; height: 20px; font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-weight: bold;">
 							×
@@ -228,4 +222,13 @@ html_content += '''
 </body>
 </html>'''
 
+# Calculate content length
+content_length = len(html_content.encode('utf-8'))
+
+# Send exit_code
+print(f"{exit_code}\r\n", end="")
+print("\r")
+
+# Send content
 print(html_content)
+

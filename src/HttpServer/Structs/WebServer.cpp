@@ -6,15 +6,16 @@
 /*   By: jalombar <jalombar@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/08/08 13:46:05 by jalombar          #+#    #+#             */
-/*   Updated: 2025/08/08 13:52:07 by jalombar         ###   ########.fr       */
+/*   Updated: 2025/08/20 15:23:32 by jalombar         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "WebServer.hpp"
+#include "Logger/Logger.hpp"
+#include "src/ConfigParser/Struct.hpp"
+#include "src/HttpServer/HttpServer.hpp"
 #include "src/HttpServer/Structs/Connection.hpp"
 #include "src/HttpServer/Structs/Response.hpp"
-#include "src/HttpServer/HttpServer.hpp"
-#include "src/HttpServer/Handlers/Handlers.hpp"
 
 bool WebServer::_running;
 static bool interrupted = false;
@@ -28,12 +29,17 @@ WebServer::WebServer(std::vector<ServerConfig> &confs)
 }
 
 // DEPRECATED?
-WebServer::WebServer(std::vector<ServerConfig> &confs, std::string &prefix_path)
+WebServer::WebServer(std::vector<ServerConfig> &confs, std::string &prefix_path, int log_level)
     : _epoll_fd(-1),
       _backlog(SOMAXCONN),
       _root_prefix_path(prefix_path),
       _confs(confs),
-      _lggr("ws.log", Logger::DEBUG, true) {
+      _lggr("ws.log",
+            log_level == 0 ? Logger::ERROR
+                           : (log_level == 1     ? Logger::WARNING
+                              : (log_level == 2) ? Logger::INFO
+                                                 : Logger::DEBUG),
+            true) {
 	_lggr.info("An instance of the Webserver was created.");
 }
 
@@ -73,7 +79,7 @@ void WebServer::run() {
 	_lggr.debug("Server running. Waiting for connections...");
 
 	while (_running) {
-		int event_count = epoll_wait(_epoll_fd, events, MAX_EVENTS, 1000);
+		int event_count = epoll_wait(_epoll_fd, events, MAX_EVENTS, 100);
 
 		if (event_count == -1 && !interrupted) {
 			_lggr.error("epoll_wait failed: " + std::string(strerror(errno)));
@@ -84,22 +90,22 @@ void WebServer::run() {
 		}
 
 		if (event_count > 0) {
-			Handlers::Epoll::processEpollEvents(this, events, event_count);
-			_lggr.debug("Processed " + su::to_string(event_count) + " events");
+			processEpollEvents(events, event_count);
+			// _lggr.debug("Processed " + su::to_string(event_count) + " events");
 			if (event_count == MAX_EVENTS) {
 				_lggr.warn("Hit MAX_EVENTS limit (" + su::to_string(MAX_EVENTS) +
 				           "), may have more events pending");
 			}
 		}
 
-		Handlers::Connection::cleanupExpiredConnections(this);
+		cleanupExpiredConnections();
 	}
 
-	for (std::vector<ServerConfig>::iterator it = _confs.begin(); it != _confs.end(); ++it) {
-		if (it->server_fd != -1) {
-			close(it->server_fd);
-		}
-	}
+	//for (std::vector<ServerConfig>::iterator it = _confs.begin(); it != _confs.end(); ++it) {
+	//	if (it->getServerFD() != -1) {
+	//		close(it->getServerFD());
+	//	}
+	//}
 }
 
 void sigint_handler(int sig) {
@@ -141,11 +147,12 @@ bool WebServer::resolveAddress(const ServerConfig &config, struct addrinfo **res
 	hints.ai_socktype = SOCK_STREAM;
 	hints.ai_flags = AI_PASSIVE;
 
-	int status =
-	    getaddrinfo(config.host.c_str(), su::to_string<int>(config.port).c_str(), &hints, result);
+	int status = getaddrinfo(config.getHost().c_str(), su::to_string<int>(config.getPort()).c_str(),
+	                         &hints, result);
 
 	if (status != 0) {
-		_lggr.logWithPrefix(Logger::ERROR, config.host + ":" + su::to_string<int>(config.port),
+		_lggr.logWithPrefix(Logger::ERROR,
+		                    config.getHost() + ":" + su::to_string<int>(config.getPort()),
 		                    "Failed to get address info");
 		return false;
 	}
@@ -153,18 +160,20 @@ bool WebServer::resolveAddress(const ServerConfig &config, struct addrinfo **res
 }
 
 bool WebServer::createAndConfigureSocket(ServerConfig &config, const struct addrinfo *addr_info) {
-	config.server_fd = socket(addr_info->ai_family, addr_info->ai_socktype, addr_info->ai_protocol);
-	if (config.server_fd == -1) {
-		_lggr.logWithPrefix(Logger::ERROR, config.host + ":" + su::to_string<int>(config.port),
+	config.setServerFD(
+	    socket(addr_info->ai_family, addr_info->ai_socktype, addr_info->ai_protocol));
+	if (config.getServerFD() == -1) {
+		_lggr.logWithPrefix(Logger::ERROR,
+		                    config.getHost() + ":" + su::to_string<int>(config.getPort()),
 		                    "Failed to create socket");
 		return false;
 	}
 
-	if (!setSocketOptions(config.server_fd, config.host, config.port)) {
+	if (!setSocketOptions(config.getServerFD(), config.getHost(), config.getPort())) {
 		return false;
 	}
 
-	if (!setNonBlocking(config.server_fd)) {
+	if (!setNonBlocking(config.getServerFD())) {
 		return false;
 	}
 
@@ -200,14 +209,16 @@ bool WebServer::setNonBlocking(int fd) {
 }
 
 bool WebServer::bindAndListen(const ServerConfig &config, const struct addrinfo *addr_info) {
-	if (bind(config.server_fd, addr_info->ai_addr, addr_info->ai_addrlen) == -1) {
-		_lggr.logWithPrefix(Logger::ERROR, config.host + ":" + su::to_string<int>(config.port),
-		                    "Failed to bind socket to port " + su::to_string<int>(config.port));
+	if (bind(config.getServerFD(), addr_info->ai_addr, addr_info->ai_addrlen) == -1) {
+		_lggr.logWithPrefix(
+		    Logger::ERROR, config.getHost() + ":" + su::to_string<int>(config.getPort()),
+		    "Failed to bind socket to port " + su::to_string<int>(config.getPort()));
 		return false;
 	}
 
-	if (listen(config.server_fd, _backlog) == -1) {
-		_lggr.logWithPrefix(Logger::ERROR, config.host + ":" + su::to_string<int>(config.port),
+	if (listen(config.getServerFD(), _backlog) == -1) {
+		_lggr.logWithPrefix(Logger::ERROR,
+		                    config.getHost() + ":" + su::to_string<int>(config.getPort()),
 		                    "Failed to listen on socket");
 		return false;
 	}
@@ -226,7 +237,7 @@ bool WebServer::epollManage(int op, int socket_fd, uint32_t events) {
 		                        : op == EPOLL_CTL_MOD ? "modify "
 		                                              : "delete ") +
 		            "fd: " + su::to_string(socket_fd) + " (" + describeEpollEvents(events) +
-		            "), but encountered an error");
+		            "), but encountered an error (" + std::string(strerror(errno)) + ")");
 		return false;
 	}
 	_lggr.debug("Fd: " + su::to_string(socket_fd) +
@@ -255,13 +266,13 @@ bool WebServer::initializeSingleServer(ServerConfig &config) {
 		return false;
 	}
 
-	if (!epollManage(EPOLL_CTL_ADD, config.server_fd, EPOLLIN)) {
+	if (!epollManage(EPOLL_CTL_ADD, config.getServerFD(), EPOLLIN)) {
 		freeaddrinfo(addr_info);
 		return false;
 	}
 
 	freeaddrinfo(addr_info);
-	_lggr.logWithPrefix(Logger::INFO, config.host + ":" + su::to_string<int>(config.port),
+	_lggr.logWithPrefix(Logger::INFO, config.getHost() + ":" + su::to_string<int>(config.getPort()),
 	                    "Server initialized!");
 
 	return true;
@@ -279,9 +290,9 @@ void WebServer::cleanup() {
 	_connections.clear();
 
 	for (std::vector<ServerConfig>::iterator it = _confs.begin(); it != _confs.end(); ++it) {
-		if (it->server_fd != -1) {
-			close(it->server_fd);
-			it->server_fd = -1;
+		if (it->getServerFD() != -1) {
+			close(it->getServerFD());
+			it->setServerFD(-1);
 		}
 	}
 
@@ -293,9 +304,20 @@ void WebServer::cleanup() {
 	_lggr.info("Server cleanup completed");
 }
 
+std::string getCurrentWorkingDirectory() {
+	char cwd[PATH_MAX];
+	if (getcwd(cwd, sizeof(cwd)) == NULL) {
+		std::cerr << "Warning: could not resolve current working directory." << std::endl;
+		return "";
+	}
+	std::string dir(cwd);
+	return dir;
+}
+
 int main(int argc, char *argv[]) {
 	ArgumentParser ap;
 	ServerArgs args;
+
 	try {
 		args = ap.parseArgs(argc, argv);
 		if (args.show_help) {
@@ -307,26 +329,28 @@ int main(int argc, char *argv[]) {
 			return 0;
 		}
 		if (args.prefix_path.empty()) {
-			args.prefix_path = ""; // getCurrentWorkingDirectory();
+			args.prefix_path = getCurrentWorkingDirectory();
 		}
+		std::cout << "prefix_path: " << args.prefix_path << std::endl;
 	} catch (const std::exception &e) {
 		std::cerr << "Error: " << e.what() << std::endl;
 		std::cerr << "Use --help for usage information." << std::endl;
 		return 1;
 	}
 
-	ConfigParser configparser;
+	ConfigParser configparser(args.log_level);
 	std::vector<ServerConfig> servers;
 
-	if (!configparser.loadConfig(args.config_file, servers)) {
+	if (!configparser.loadConfig(args.config_file, servers, args.prefix_path, args.log_level)) {
 		std::cerr << "Error: Failed to open or parse configuration file '" << args.config_file
 		          << "'" << std::endl;
 		std::cerr << "Please check the configuration file syntax and try again." << std::endl;
 		return 1;
 	}
 
-	WebServer webserv(servers, args.prefix_path);
+	WebServer webserv(servers, args.prefix_path, args.log_level);
 
+    webserv.log_level = args.log_level;
 	if (!webserv.initialize()) {
 		std::cerr << "Failed to initialize web server." << std::endl;
 		return 1;
@@ -335,24 +359,3 @@ int main(int argc, char *argv[]) {
 	webserv.run();
 	return 0;
 }
-
-// Accessors and wrappers for handlers
-Logger &WebServer::getLogger() { return _lggr; }
-int WebServer::getEpollFd() const { return _epoll_fd; }
-const std::vector<ServerConfig> &WebServer::getConfigs() const { return _confs; }
-std::vector<ServerConfig> &WebServer::getConfigs() { return _confs; }
-std::map<int, Connection *> &WebServer::getConnections() { return _connections; }
-std::map<int, std::pair<CGI *, Connection *> > &WebServer::getCgiPool() { return _cgi_pool; }
-time_t WebServer::getLastCleanup() const { return _last_cleanup; }
-void WebServer::setLastCleanup(time_t t) { _last_cleanup = t; }
-
-bool WebServer::epollCtl(int op, int socket_fd, uint32_t events) { return epollManage(op, socket_fd, events); }
-bool WebServer::setFdNonBlocking(int fd) { return setNonBlocking(fd); }
-time_t WebServer::now() const { return getCurrentTime(); }
-std::string WebServer::readFileContent(std::string path) { return getFileContent(path); }
-FileType WebServer::getFileType(std::string path) { return checkFileType(path); }
-std::string WebServer::buildLocationFullPath(const std::string &uri, LocConfig *Location) { return buildFullPath(uri, Location); }
-
-int WebServer::getConnectionTimeout() const { return CONNECTION_TO; }
-int WebServer::getCleanupInterval() const { return CLEANUP_INTERVAL; }
-int WebServer::getBufferSize() const { return BUFFER_SIZE; }

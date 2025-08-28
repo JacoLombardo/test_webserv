@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   Webserv.hpp                                        :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: jalombar <jalombar@student.42.fr>          +#+  +:+       +#+        */
+/*   By: htharrau <htharrau@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/06/19 14:47:40 by jalombar          #+#    #+#             */
-/*   Updated: 2025/08/07 14:14:30 by jalombar         ###   ########.fr       */
+/*   Updated: 2025/08/22 16:32:50 by htharrau         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -29,6 +29,7 @@
 #include <fstream> // for ifstream
 #include <functional>
 #include <iostream>
+#include <iomanip>
 #include <map> // for map
 #include <netdb.h>
 #include <netinet/in.h>
@@ -45,6 +46,11 @@
 #include <utility>     // for makepair
 #include <vector>      // for vector
 
+ 
+enum FileType { ISDIR, ISREG, NOT_FOUND_404, PERMISSION_DENIED_403, FILE_SYSTEM_ERROR_500 };
+enum MaxBody { DEFAULT, INFINITE, SPECIFIED };
+
 #define CHUNK_SIZE 500
+#define CHUNKED_TIMEOUT 10000
 
 #endif

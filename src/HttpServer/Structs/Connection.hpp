@@ -3,19 +3,20 @@
 /*                                                        :::      ::::::::   */
 /*   Connection.hpp                                     :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: jalombar <jalombar@student.42.fr>          +#+  +:+       +#+        */
+/*   By: htharrau <htharrau@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/08/08 13:38:20 by jalombar          #+#    #+#             */
-/*   Updated: 2025/08/08 14:29:28 by jalombar         ###   ########.fr       */
+/*   Updated: 2025/08/25 14:24:49 by htharrau         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #ifndef CONNECTION_HPP
 #define CONNECTION_HPP
 
-#include "includes/Webserv.hpp"
-#include "src/ConfigParser/ConfigParser.hpp"
 #include "Response.hpp"
+#include "includes/Types.hpp"
+#include "includes/Webserv.hpp"
+#include "src/ConfigParser/Struct.hpp"
 
 class WebServer;
 class Response;
@@ -43,6 +44,9 @@ class Connection {
 
 	std::string read_buffer;
 	size_t body_bytes_read; // for client_max_body_size
+	ssize_t content_length; // ignore if -1
+
+	std::vector<unsigned char> body_data;
 
 	bool chunked;
 	size_t chunk_size;
@@ -50,17 +54,19 @@ class Connection {
 	std::string chunk_data;
 	std::string headers_buffer;
 
+	ClientRequest parsed_request;
+
 	Response response;
+	std::string cgi_response;
 	bool response_ready;
 	int request_count;
+	bool should_close;
 
-  public:
 	/// Represents the current state of request processing.
 	enum State {
 		READING_HEADERS,  ///< Reading request headers
 		REQUEST_COMPLETE, ///< Complete request received
-
-		CONTINUE_SENT,         ///< 100-Continue response sent
+		READING_BODY,     ///< Reading request body, when Content-Length > 0
 		READING_CHUNK_SIZE,    ///< Reading chunk size line
 		READING_CHUNK_DATA,    ///< Reading chunk data
 		READING_CHUNK_TRAILER, ///< Reading chunk trailer
@@ -68,7 +74,7 @@ class Connection {
 		CHUNK_COMPLETE         ///< Chunked transfer complete
 	};
 
-	State &stateRef() { return state; }
+	State state;
 
 	/// Constructs a new Connection object.
 	/// \param socket_fd The file descriptor for the client socket.
@@ -97,29 +103,8 @@ class Connection {
 
 	void resetForNewRequest(); // reset locConfig body_bytes_read, ...
 
+  public:
 	ServerConfig *getServerConfig() const { return servConfig; }
-
-	// Public accessors for handlers
-	int getFd() const { return fd; }
-	time_t &lastActivity() { return last_activity; }
-	bool &keepPersistentConnection() { return keep_persistent_connection; }
-	std::string &readBuffer() { return read_buffer; }
-	bool &chunkedFlag() { return chunked; }
-	size_t &chunkSize() { return chunk_size; }
-	size_t &chunkBytesRead() { return chunk_bytes_read; }
-	std::string &chunkData() { return chunk_data; }
-	std::string &headersBuffer() { return headers_buffer; }
-	Response &responseObj() { return response; }
-	bool &responseReady() { return response_ready; }
-	int &requestCount() { return request_count; }
-	LocConfig *&locationConfig() { return locConfig; }
-
-	void publicUpdateActivity() { updateActivity(); }
-	bool publicIsExpired(time_t current_time, int timeout) const { return isExpired(current_time, timeout); }
-	std::string debugString() { return toString(); }
-
-  private:
-	State state;
 };
 
 #endif

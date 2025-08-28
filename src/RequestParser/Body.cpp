@@ -3,42 +3,40 @@
 /*                                                        :::      ::::::::   */
 /*   Body.cpp                                           :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: jalombar <jalombar@student.42.fr>          +#+  +:+       +#+        */
+/*   By: htharrau <htharrau@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/06/25 10:46:18 by jalombar          #+#    #+#             */
-/*   Updated: 2025/08/07 14:18:09 by jalombar         ###   ########.fr       */
+/*   Updated: 2025/08/22 15:25:29 by htharrau         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "RequestParser.hpp"
 
-bool RequestParsingUtils::checkNTrimLine(std::string &line) {
-	Logger logger;
+uint16_t RequestParsingUtils::checkNTrimLine(std::string &line, Logger &logger) {
 	// Check line ending (\r\n)
 	if (line.empty()) {
 		logger.logWithPrefix(Logger::WARNING, "HTTP", "Invalid line ending");
-		return (false);
+		return 400;
 	}
 	if (!line.empty() && line[line.length() - 1] != '\r') {
 		logger.logWithPrefix(Logger::WARNING, "HTTP", "Invalid line ending");
-		return (false);
+		return 400;
 	}
 	if (!line.empty() && line[line.length() - 1] == '\r')
 		line.erase(line.length() - 1);
-	return (true);
+	return 0;
 }
 
-bool RequestParsingUtils::parseBody(std::istringstream &stream, ClientRequest &request) {
-	Logger logger;
+uint16_t RequestParsingUtils::parseBody(std::istringstream &stream, ClientRequest &request, Logger &logger) {
 	logger.logWithPrefix(Logger::DEBUG, "HTTP", "Parsing message body");
 
-	const char *content_length_value = findHeader(request, "content-length");
+	const char *content_length_value = findHeader(request, "content-length", logger);
 
 	// Enforce Content-Length for POST even if body is empty
-	if (!content_length_value) {
+	if (!content_length_value ) {
 		if (request.method == "POST") {
 			logger.logWithPrefix(Logger::WARNING, "HTTP", "Missing Content-Length for POST");
-			return (false);
+			return 411; // Length Required
 		}
 
 		// For GET/DELETE: accept if no body follows
@@ -46,12 +44,12 @@ bool RequestParsingUtils::parseBody(std::istringstream &stream, ClientRequest &r
 		char probe;
 		if (stream.get(probe)) {
 			logger.logWithPrefix(Logger::WARNING, "HTTP", "Request has body but no Content-Length");
-			return (false);
+			return 411; // Length Required
 		}
 		// Rewind and accept
 		stream.clear();
 		stream.seekg(start);
-		return (true);
+		return 0;
 	}
 
 	// Validate and parse Content-Length
@@ -59,18 +57,19 @@ bool RequestParsingUtils::parseBody(std::istringstream &stream, ClientRequest &r
 	int content_length;
 	if (!(content_length_stream >> content_length) || content_length < 0) {
 		logger.logWithPrefix(Logger::WARNING, "HTTP", "Invalid Content-Length");
-		return (false);
+		return 400;
 	}
 	// Read exactly content_length bytes
 	std::string body(content_length, '\0');
 	stream.read(&body[0], content_length);
 	std::streamsize actually_read = stream.gcount();
+	std::cout << "____________CONTENT LENGTH: " << content_length << ", ACTUALLY READ: " << actually_read << std::endl;
 	if (actually_read != content_length) {
 		logger.logWithPrefix(Logger::WARNING, "HTTP",
 		                     "Body length mismatch: expected " + su::to_string(content_length) +
 		                         " bytes, but read " + su::to_string(actually_read) + " bytes");
-		return (false);
+		return 400;
 	}
 	request.body = body;
-	return (true);
+	return 0;
 }

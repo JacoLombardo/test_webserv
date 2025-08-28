@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   StringUtils.hpp                                    :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: jalombar <jalombar@student.42.fr>          +#+  +:+       +#+        */
+/*   By: htharrau <htharrau@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/08/07 14:04:56 by jalombar          #+#    #+#             */
-/*   Updated: 2025/08/07 14:18:54 by jalombar         ###   ########.fr       */
+/*   Updated: 2025/08/26 10:52:07 by htharrau         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -290,6 +290,26 @@ inline std::string extract_between(const std::string &str, const std::string &st
  */
 inline bool iequals(const std::string &str1, const std::string &str2) {
 	return to_lower(str1) == to_lower(str2);
+}
+
+/**
+ * Last character
+ */
+inline char back(const std::string &s) { return s[s.size() - 1]; }
+
+inline std::string humanReadableBytes(size_t bytes) {
+	const char *units[] = {"bytes", "KB", "MB", "GB", "TB", "PB"};
+	size_t unitIndex = 0;
+	double size = static_cast<double>(bytes);
+
+	while (size >= 1024 && unitIndex < 5) {
+		size /= 1024;
+		++unitIndex;
+	}
+
+	std::ostringstream out;
+	out << std::fixed << std::setprecision(1) << size << " " << units[unitIndex];
+	return out.str();
 }
 
 } // namespace su

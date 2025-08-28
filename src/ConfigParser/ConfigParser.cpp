@@ -3,24 +3,26 @@
 /*                                                        :::      ::::::::   */
 /*   ConfigParser.cpp                                   :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: jalombar <jalombar@student.42.fr>          +#+  +:+       +#+        */
+/*   By: htharrau <htharrau@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/08/07 13:54:15 by jalombar          #+#    #+#             */
-/*   Updated: 2025/08/07 13:54:19 by jalombar         ###   ########.fr       */
+/*   Updated: 2025/08/18 15:52:53 by htharrau         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "ConfigParser.hpp"
+// #include "Struct.hpp"
 
-bool ConfigParser::loadConfig(const std::string &filePath, std::vector<ServerConfig> &servers) {
+bool ConfigParser::loadConfig(const std::string &filePath, std::vector<ServerConfig> &servers,
+                              std::string &prefix, int log_level) {
 
 	ConfigNode tree;
-	ConfigParser configparser;
+	ConfigParser configparser(log_level);
 
 	if (!configparser.parseTree(filePath, tree))
 		return false;
 
-	if (!configparser.convertTreeToStruct(tree, servers))
+	if (!configparser.convertTreeToStruct(tree, servers, prefix))
 		return false;
 
 	return true;
@@ -41,7 +43,7 @@ bool ConfigParser::parseTree(const std::string &filePath, ConfigNode &childNode)
 		return false;
 	}
 
-	logg_.logWithPrefix(Logger::INFO, "CONFIG", "Configuration tree successfully created.");
+	logg_.logWithPrefix(Logger::DEBUG, "CONFIG", "Configuration tree successfully created.");
 	logg_.logWithPrefix(Logger::DEBUG, "CONFIG", "Dumping server tree:");
 	std::ostringstream oss;
 	ConfigParser::printTree(childNode, "", true, oss);
@@ -72,7 +74,7 @@ bool ConfigParser::parseTreeBlocks(std::ifstream &file, int &line_nb, ConfigNode
 			}
 		}
 		// Traitement des directives simples (se terminant par ;)
-		else if (!clean.empty() && clean[clean.size() - 1] == ';') {
+		else if (!clean.empty() && su::back(clean) == ';') {
 			accumulated_line = clean;
 			statement_start_line = line_nb;
 		}

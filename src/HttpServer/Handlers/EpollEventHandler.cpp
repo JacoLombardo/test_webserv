@@ -3,124 +3,147 @@
 /*                                                        :::      ::::::::   */
 /*   EpollEventHandler.cpp                              :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: jalombar <jalombar@student.42.fr>          +#+  +:+       +#+        */
+/*   By: htharrau <htharrau@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/08/07 14:06:48 by jalombar          #+#    #+#             */
-/*   Updated: 2025/08/08 14:17:02 by jalombar         ###   ########.fr       */
+/*   Updated: 2025/08/25 14:57:59 by htharrau         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
-#include "src/HttpServer/Handlers/Handlers.hpp"
+#include "src/HttpServer/HttpServer.hpp"
+#include "src/HttpServer/Structs/Connection.hpp"
+#include "src/HttpServer/Structs/Response.hpp"
+#include "src/HttpServer/Structs/WebServer.hpp"
 
-void Handlers::Epoll::processEpollEvents(WebServer *server, const struct epoll_event *events, int event_count) {
+void WebServer::processEpollEvents(const struct epoll_event *events, int event_count) {
 	for (int i = 0; i < event_count; ++i) {
 		const uint32_t event_mask = events[i].events;
 		const int fd = events[i].data.fd;
 
-		server->getLogger().debug("Epoll event on fd=" + su::to_string(fd) + " (" +
-		            describeEpollEvents(event_mask) + ")");
+		// _lggr.debug("Epoll event on fd=" + su::to_string(fd) + " (" +
+		//             describeEpollEvents(event_mask) + ")");
 
-		if (isListeningSocket(server, fd)) {
-			// TODO: NULL check
-			ServerConfig *sc = ServerConfig::find(server->getConfigs(), fd);
-			Handlers::Connection::handleNewConnection(server, sc);
-		} else if (Handlers::CGIHandler::isCGIFd(server, fd)) {
-			Handlers::CGIHandler::handleCGIOutput(server, fd);
+		if (isListeningSocket(fd)) {
+			ServerConfig *sc = ServerConfig::find(_confs, fd);
+			handleNewConnection(sc);
+		} else if (isCGIFd(fd)) {
+			handleCGIOutput(fd);
 		} else {
-			handleClientEvent(server, fd, event_mask);
+			handleClientEvent(fd, event_mask);
 		}
 	}
 }
 
-bool Handlers::Epoll::isListeningSocket(WebServer *server, int fd) {
-	for (std::vector<ServerConfig>::const_iterator it = server->getConfigs().begin(); it != server->getConfigs().end(); ++it) {
-		if (fd == it->getServerFd()) {
+bool WebServer::isListeningSocket(int fd) const {
+	for (std::vector<ServerConfig>::const_iterator it = _confs.begin(); it != _confs.end(); ++it) {
+		if (fd == it->getServerFD()) {
 			return true;
 		}
 	}
 	return false;
 }
 
-void Handlers::Epoll::handleClientEvent(WebServer *server, int fd, uint32_t event_mask) {
-	std::map<int, ::Connection *>::iterator conn_it = server->getConnections().find(fd);
-	if (conn_it != server->getConnections().end()) {
-		::Connection *conn = conn_it->second;
+void WebServer::handleClientEvent(int fd, uint32_t event_mask) {
+	std::map<int, Connection *>::iterator conn_it = _connections.find(fd);
+	if (conn_it != _connections.end()) {
+		Connection *conn = conn_it->second;
 		if (event_mask & EPOLLIN) {
-			handleClientRecv(server, conn);
+			handleClientRecv(conn);
+			if (_connections.find(fd) == _connections.end()) {
+				return; // Connection was closed, don't continue
+			}
 		}
 		if (event_mask & EPOLLOUT) {
-			if (conn->responseReady())
-				Handlers::Response::sendResponse(server, conn);
-			if (!conn->keepPersistentConnection())
-				Handlers::Connection::closeConnection(server, conn);
+			if (conn->response_ready) {
+				if (!sendResponse(conn))
+					closeConnection(conn);
+			} else {
+				_lggr.error("Response is not ready to be sent back to the client");
+				_lggr.debug("Error for clinet " + conn->toString());
+			}
+			if (!conn->keep_persistent_connection || conn->should_close)
+				closeConnection(conn);
+		}
+		if (event_mask & (EPOLLERR | EPOLLHUP)) {
+			_lggr.error("Error/hangup event for fd: " + su::to_string(fd));
+			closeConnection(conn);
 		}
 	} else {
-		server->getLogger().debug("Ignoring event for unknown fd: " + su::to_string(fd));
+		_lggr.debug("Ignoring event for unknown fd: " + su::to_string(fd));
+		epollManage(EPOLL_CTL_DEL, fd, 0);
+		close(fd);
 	}
 }
 
-void Handlers::Epoll::handleClientRecv(WebServer *server, ::Connection *conn) {
-	server->getLogger().debug("Updated last activity for FD " + su::to_string(conn->getFd()));
-	conn->publicUpdateActivity();
+void WebServer::handleClientRecv(Connection *conn) {
+	_lggr.debug("Updated last activity for FD " + su::to_string(conn->fd));
+	conn->updateActivity();
 
-	char buffer[4096 * 3];
-	ssize_t total_bytes_read = 0;
+	char buffer[BUFFER_SIZE];
 
-	ssize_t bytes_read = receiveData(server, conn->getFd(), buffer, sizeof(buffer) - 1);
+	ssize_t bytes_read = receiveData(conn->fd, buffer, sizeof(buffer) - 1);
 
 	if (bytes_read > 0) {
-		total_bytes_read += bytes_read;
-
-		if (!processReceivedData(server, conn, buffer, bytes_read, total_bytes_read)) {
+		if (!processReceivedData(conn, buffer, bytes_read)) {
 			return;
 		}
 	} else if (bytes_read == 0) {
-		server->getLogger().warn("Client (fd: " + su::to_string(conn->getFd()) + ") closed connection");
-		conn->keepPersistentConnection() = false;
-		Handlers::Connection::closeConnection(server, conn);
+		_lggr.warn("Client (fd: " + su::to_string(conn->fd) + ") closed connection");
+		conn->keep_persistent_connection = false;
+		closeConnection(conn);
 		return;
 	} else if (bytes_read < 0) {
-		server->getLogger().error("recv error for fd " + su::to_string(conn->getFd()) + ": " + strerror(errno));
-		Handlers::Connection::closeConnection(server, conn);
+		_lggr.error("recv error for fd " + su::to_string(conn->fd) + ": " + strerror(errno));
+		closeConnection(conn);
 		return;
 	}
 }
 
-ssize_t Handlers::Epoll::receiveData(WebServer *server, int client_fd, char *buffer, size_t buffer_size) {
+ssize_t WebServer::receiveData(int client_fd, char *buffer, size_t buffer_size) {
 	errno = 0;
 	ssize_t bytes_read = recv(client_fd, buffer, buffer_size, 0);
 
-	server->getLogger().logWithPrefix(Logger::DEBUG, "recv", "Bytes received: " + su::to_string(bytes_read));
+	_lggr.logWithPrefix(Logger::DEBUG, "recv", "Bytes received: " + su::to_string(bytes_read));
 	if (bytes_read > 0) {
 		buffer[bytes_read] = '\0';
 	}
 
-	server->getLogger().logWithPrefix(Logger::DEBUG, "recv", "Data: " + std::string(buffer));
+	_lggr.logWithPrefix(Logger::DEBUG, "recv", "Data: " + std::string(buffer));
 
 	return bytes_read;
 }
 
-bool Handlers::Epoll::processReceivedData(WebServer *server, ::Connection *conn, const char *buffer, ssize_t bytes_read,
-                                    ssize_t total_bytes_read) {
-	conn->readBuffer() += std::string(buffer);
+bool WebServer::processReceivedData(Connection *conn, const char *buffer, ssize_t bytes_read) {
+			
+	if (conn->state == Connection::READING_HEADERS) {
+		conn->read_buffer += std::string(buffer, bytes_read);
+	}
 
-	server->getLogger().debug("Checking if request was completed");
-	if (Handlers::Request::isRequestComplete(server, conn)) {
-		if (!server->epollCtl(EPOLL_CTL_MOD, conn->getFd(), EPOLLIN | EPOLLOUT)) {
+	else if (conn->state == Connection::READING_BODY) {
+		conn->body_data.insert(conn->body_data.end(),
+		                       reinterpret_cast<const unsigned char *>(buffer),
+		                       reinterpret_cast<const unsigned char *>(buffer + bytes_read));
+		conn->body_bytes_read += bytes_read;
+
+		_lggr.debug("Read " + su::to_string(conn->body_bytes_read) + " bytes of body so far");
+	}
+
+	else {
+		conn->read_buffer += std::string(buffer, bytes_read);
+		if (conn->state == Connection::READING_BODY) {
+			conn->body_bytes_read += bytes_read;
+		}
+	}
+
+	_lggr.debug("Checking if request was completed");
+	if (isRequestComplete(conn)) {
+		if (!epollManage(EPOLL_CTL_MOD, conn->fd, EPOLLOUT)) {
 			return false;
 		}
-		server->getLogger().debug("Request was completed");
-		if (conn->chunkedFlag() && conn->stateRef() == ::Connection::CONTINUE_SENT) {
-			return true;
-		}
-		if (!conn->getServerConfig()->infiniteBodySize() &&
-		    total_bytes_read > static_cast<ssize_t>(conn->getServerConfig()->getMaxBodySize())) {
-			server->getLogger().debug("Request is too large");
-			Handlers::Request::handleRequestTooLarge(server, conn, bytes_read);
+		_lggr.debug("Request was completed");
+		if (conn->should_close)
 			return false;
-		}
-
-		return Handlers::Request::handleCompleteRequest(server, conn);
+		return handleCompleteRequest(conn);
 	}
 
 	return true;

@@ -1,5 +1,8 @@
 <?php
 
+// Start output buffering to calculate content length
+ob_start();
+
 $upload_dir = getenv('UPLOAD_DIR');
 
 // Create upload directory if it doesn't exist
@@ -12,13 +15,16 @@ $filename = '';
 $filesize = 0;
 $file_extension = '';
 $error_message = '';
+$exit_code = '200';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['file'])) {
+
 	// Get uploaded file
 	$uploaded_file = $_FILES['file'];
 
 	// Check if file was uploaded successfully
 	if ($uploaded_file['error'] === UPLOAD_ERR_OK) {
+	
 		// Sanitize filename
 		$filename = basename($uploaded_file['name']);
 		$filename = preg_replace('/[^a-zA-Z0-9._-]/', '', $filename);
@@ -49,12 +55,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['file'])) {
 
 		// Move uploaded file
 		if (move_uploaded_file($uploaded_file['tmp_name'], $target_path)) {
+
 			$uploaded = true;
 			$filesize = $uploaded_file['size'];
+			$exit_code = '201';
+		} else {
+			$error_message = 'Unable to save file';
+			$exit_code = '502';
 		}
+	} elseif ($uploaded_file['error'] === UPLOAD_ERR_INI_SIZE || $uploaded_file['error'] === UPLOAD_ERR_FORM_SIZE) {
+		$error_message = 'File too large';
+		$exit_code = '413';
+	} elseif ($uploaded_file['error'] === UPLOAD_ERR_NO_FILE) {
+		$error_message = 'No file uploaded';
+		$exit_code = '400';
 	} else {
-		$error_message = 'Unable to upload the file';
+		$error_message = 'Unknown upload error';
+		$exit_code = '502';
 	}
+} elseif ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+	$error_message = 'Invalid request method';
+	$exit_code = '405';
 }
 
 // Function to get file icon based on extension
@@ -181,6 +202,7 @@ if ($error_message != '') {
 						<div style="position: relative; text-align: center; padding: 1rem; background: rgba(255,255,255,0.1); border-radius: 12px; backdrop-filter: blur(10px);">
 							<form method="POST" action="delete.php" style="position: absolute; top: 8px; right: 8px; margin: 0;">
 								<input type="hidden" name="filename" value="<?php echo htmlspecialchars($file); ?>">
+								<input type="hidden" name="_method" value="DELETE">
 								<button type="submit" 
 										style="background: rgba(255,0,0,0.7); color: white; border: none; border-radius: 50%; width: 20px; height: 20px; font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-weight: bold;">
 									×
@@ -206,3 +228,17 @@ if ($error_message != '') {
 	</div>
 </body>
 </html>
+
+<?php
+
+// Calculate length
+$content = ob_get_contents();
+ob_end_clean();
+$content_length = strlen($content);
+
+echo $exit_code . "\n";
+
+// Output content
+echo $content;
+
+?>

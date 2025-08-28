@@ -3,14 +3,16 @@
 /*                                                        :::      ::::::::   */
 /*   ConfigHelper.cpp                                   :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: jalombar <jalombar@student.42.fr>          +#+  +:+       +#+        */
+/*   By: htharrau <htharrau@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/08/07 13:54:29 by jalombar          #+#    #+#             */
-/*   Updated: 2025/08/07 13:54:31 by jalombar         ###   ########.fr       */
+/*   Updated: 2025/08/24 00:23:04 by htharrau         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "ConfigParser.hpp"
+#include "Struct.hpp"
+
 
 // Remove comments and trim
 std::string ConfigParser::preProcess(const std::string &line) const {
@@ -20,9 +22,7 @@ std::string ConfigParser::preProcess(const std::string &line) const {
 }
 
 // isUtil
-bool ConfigParser::isBlockStart(const std::string &line) const {
-	return (su::ends_with(line, "{"));
-}
+bool ConfigParser::isBlockStart(const std::string &line) const { return (su::ends_with(line, "{")); }
 bool ConfigParser::isBlockEnd(const std::string &line) const { return (line == "}"); }
 bool ConfigParser::isDirective(const std::string &line) const { return (su::ends_with(line, ";")); }
 
@@ -61,11 +61,11 @@ bool ConfigParser::isValidIPv4(const std::string &ip) {
 // location path, return target uri, upload_path, root
 // starts with /, allow common char
 bool ConfigParser::isValidUri(const std::string &str) {
-	if (str[0] == '/') {
-		for (size_t i = 0; i < str.length(); ++i) {
+	if (str[0] == '/' || (str[0] == '.' && str[1] == '/')) {
+		for (size_t i = 1; i < str.length(); ++i) {
 			char c = str[i];
 			if (!std::isalnum(c) && c != '/' && c != '-' && c != '_' && c != '?' && c != '&' &&
-			    c != '=' && c != '#' && c != '%' && c != ':' && c != '@' && c != '~') {
+				c != '=' && c != '#' && c != '%' && c != ':' && c != '@' && c != '~') {
 				return false;
 			}
 		}
@@ -79,7 +79,7 @@ bool ConfigParser::hasOKChar(const std::string &str) {
 	for (size_t i = 0; i < str.length(); ++i) {
 		char c = str[i];
 		if (!std::isalnum(c) && c != '/' && c != '-' && c != '_' && c != '?' && c != '.' &&
-		    c != '&' && c != '=' && c != '#' && c != '%' && c != ':' && c != '@' && c != '~') {
+			c != '&' && c != '=' && c != '#' && c != '%' && c != ':' && c != '@' && c != '~') {
 			return false;
 		}
 	}
@@ -98,9 +98,9 @@ bool ConfigParser::isHttp(const std::string &url) {
 }
 
 const int http_status_codes[] = {300, 301, 302, 303, 307, 308, 400, 401, 402, 403, 404, 405,
-                                 406, 407, 408, 409, 410, 411, 412, 413, 414, 415, 416, 417,
-                                 418, 421, 422, 423, 424, 425, 426, 428, 429, 431, 451, 500,
-                                 501, 502, 503, 504, 505, 506, 507, 508, 510, 511};
+								 406, 407, 408, 409, 410, 411, 412, 413, 414, 415, 416, 417,
+								 418, 421, 422, 423, 424, 425, 426, 428, 429, 431, 451, 500,
+								 501, 502, 503, 504, 505, 506, 507, 508, 510, 511};
 
 // Helper function to check if code is in the list
 bool ConfigParser::unknownCode(uint16_t code) {
@@ -133,7 +133,7 @@ std::string ConfigParser::joinArgs(const std::vector<std::string> &args) {
 	return result;
 }
 void ConfigParser::printTree(const ConfigNode &node, const std::string &prefix, bool isLast,
-                             std::ostream &os) const {
+							 std::ostream &os) const {
 	os << prefix;
 	os << (isLast ? "└── " : "├── ");
 	os << node.name_;
@@ -151,6 +151,8 @@ void ConfigParser::printTree(const ConfigNode &node, const std::string &prefix, 
 		printTree(node.children_[i], childPrefix, childIsLast, os);
 	}
 }
+
+
 
 ////////////////
 // PRINT STRUCT
@@ -175,12 +177,14 @@ void ConfigParser::printLocationConfig(const LocConfig &loc, std::ostream &os) c
 		os << "    Index: " << loc.index << "\n";
 	}
 
-	// ADD THIS: Print upload_path if it's set
+	os << "    Max body size: " << su::humanReadableBytes(loc.client_max_body_size) << "\n";
+
 	if (!loc.upload_path.empty()) {
 		os << "    Upload path: " << loc.upload_path << "\n";
 	}
 
 	os << "    Autoindex: " << (loc.autoindex ? "on" : "off") << "\n";
+	os << "    Exact match only: " << (loc.exact_match ? "on" : "off") << "\n";
 
 	if (!loc.allowed_methods.empty()) {
 		os << "    Allowed methods: ";
@@ -199,20 +203,18 @@ void ConfigParser::printLocationConfig(const LocConfig &loc, std::ostream &os) c
 	if (!loc.cgi_extensions.empty()) {
 		os << "    CGI extensions:\n";
 		for (std::map<std::string, std::string>::const_iterator it = loc.cgi_extensions.begin();
-		     it != loc.cgi_extensions.end(); ++it) {
+			 it != loc.cgi_extensions.end(); ++it) {
 			os << "      " << it->first << " -> " << it->second << "\n";
 		}
 	}
 }
 void ConfigParser::printServerConfig(const ServerConfig &server, std::ostream &os) const {
-	os << "Server on " << server.host << ":" << server.port << "\n";
-
-	os << "  Client max body size: " << server.client_max_body_size << " bytes\n";
+	os << "Server on " << server.getHost() << ":" << server.port << "\n";
 
 	if (!server.error_pages.empty()) {
 		os << "  Error pages:\n";
 		for (std::map<uint16_t, std::string>::const_iterator it = server.error_pages.begin();
-		     it != server.error_pages.end(); ++it) {
+			 it != server.error_pages.end(); ++it) {
 			os << "    " << it->first << " -> " << it->second << "\n";
 		}
 	}

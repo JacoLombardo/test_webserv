@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   Response.hpp                                       :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: jalombar <jalombar@student.42.fr>          +#+  +:+       +#+        */
+/*   By: htharrau <htharrau@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/08/07 14:05:50 by jalombar          #+#    #+#             */
-/*   Updated: 2025/08/08 14:29:46 by jalombar         ###   ########.fr       */
+/*   Updated: 2025/08/17 22:28:13 by htharrau         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -58,25 +58,30 @@ class Response {
 	static Response notFound();
 	static Response internalServerError();
 	static Response badRequest();
-	static Response methodNotAllowed();
+	static Response methodNotAllowed(const std::string &allowed);
+	static Response contentTooLarge();
 	static Response notImplemented();
 	static Response forbidden();
+	static Response badGateway();
+	static Response gatewayTimeout();
+	static Response HttpNotSupported();
 
 	// Factory methods overload when Connexion instance is available
 	static Response notFound(Connection *conn);
 	static Response internalServerError(Connection *conn);
 	static Response badRequest(Connection *conn);
-	static Response methodNotAllowed(Connection *conn);
+	static Response methodNotAllowed(Connection *conn, const std::string &allowed);
+	static Response contentTooLarge(Connection *conn);
 	static Response notImplemented(Connection *conn);
 	static Response forbidden(Connection *conn);
+	static Response badGateway(Connection *conn);
+	static Response gatewayTimeout(Connection *conn);
+	static Response HttpNotSupported(Connection *conn);
 
   private:
 	std::string getReasonPhrase(uint16_t code) const;
 	void initFromStatusCode(uint16_t code);
 	void initFromCustomErrorPage(uint16_t code, Connection *conn);
-
-	static Logger
-	    tmplogg_; // not sure this is the best logic for the logger but i wanted to be able to log
 };
 
 #endif /* end of include guard: RESPONSE_HPP */

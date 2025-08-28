@@ -3,18 +3,23 @@
 /*                                                        :::      ::::::::   */
 /*   ValidDirective.cpp                                 :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: jalombar <jalombar@student.42.fr>          +#+  +:+       +#+        */
+/*   By: htharrau <htharrau@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/08/07 13:52:39 by jalombar          #+#    #+#             */
-/*   Updated: 2025/08/07 14:13:05 by jalombar         ###   ########.fr       */
+/*   Updated: 2025/08/21 15:50:37 by htharrau         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "ConfigParser.hpp"
 
 // Constructor - initialize valid directives
-ConfigParser::ConfigParser() {
-	logg_.setLogLevel(Logger::DEBUG);
+ConfigParser::ConfigParser(int log_level)
+    : logg_("Config.log",
+            log_level == 0 ? Logger::ERROR
+                           : (log_level == 1     ? Logger::WARNING
+                              : (log_level == 2) ? Logger::INFO
+                                                 : Logger::DEBUG),
+            true) {
 	initValidDirectives();
 }
 
@@ -32,9 +37,8 @@ void ConfigParser::initValidDirectives() {
 	                                    1, &ConfigParser::validateListen));
 	validDirectives_.push_back(Validity("error_page", std::vector<std::string>(1, "server"), true,
 	                                    2, SIZE_MAX, &ConfigParser::validateError));
-	validDirectives_.push_back(Validity("client_max_body_size",
-	                                    std::vector<std::string>(1, "server"), false, 1, 1,
-	                                    &ConfigParser::validateMaxBody));
+	validDirectives_.push_back(Validity("client_max_body_size", makeVector("server", "location"),
+	                                    false, 1, 1, &ConfigParser::validateMaxBody));
 	validDirectives_.push_back(Validity("location", std::vector<std::string>(1, "server"), true, 1,
 	                                    1, &ConfigParser::validateLocation));
 	// server or location level  (will be inherited in the locations if not set in the location)
@@ -89,17 +93,17 @@ bool ConfigParser::validateDirective(const ConfigNode &node, const ConfigNode &p
 					return false;
 				}
 			}
-			if (node.args_.size() < it->minArgs_ || node.args_.size() > it->maxArgs_) {
+			if (node.args_.size() < it->min_args_ || node.args_.size() > it->max_args_) {
 				logg_.logWithPrefix(Logger::WARNING, "Configuration file",
 				                    "Directive '" + node.name_ + "' expects between " +
-				                        su::to_string(it->minArgs_) + " and " +
-				                        su::to_string(it->maxArgs_) + " arguments, but got " +
+				                        su::to_string(it->min_args_) + " and " +
+				                        su::to_string(it->max_args_) + " arguments, but got " +
 				                        su::to_string(node.args_.size()) + " on line " +
 				                        su::to_string(node.line_));
 				return false;
 			}
-			if (it->validF_ != NULL) {
-				if (!(this->*(it->validF_))(node))
+			if (it->valid_f_ != NULL) {
+				if (!(this->*(it->valid_f_))(node))
 					return false;
 			}
 			return true;
@@ -158,30 +162,49 @@ bool ConfigParser::validateListen(const ConfigNode &node) {
 	return true;
 }
 
-// RETURN : 300 - 399. If no code-> one arg (URL), otherwise code uri/url
+// RETURN : 300 - 599. If no code-> one arg (URL or error), otherwise code + uri/url
 bool ConfigParser::validateReturn(const ConfigNode &node) {
-	// first args is URL , no second arg = ok (will be code 302), otherwise pb
-	if (isHttp(node.args_[0]) && node.args_.size() == 1) {
+	// 1 arg: url or error code
+	if (node.args_.size() == 1) {
+		const std::string &arg = node.args_[0];
+		if (isHttp(arg) || isValidUri(arg))
+			return true;
+		std::istringstream ss(arg);
+		uint16_t code;
+		if ((ss >> code) && ss.eof() && code > 399 && !unknownCode(code)) {
+			return true;
+		}
+		logg_.logWithPrefix(Logger::WARNING, "Configuration file",
+		                    "Invalid return value: " + arg + " on line " +
+		                        su::to_string(node.line_));
+		return false;
+	}
+
+	// 2 args : return code + uri/url
+	if (node.args_.size() == 2) {
+		std::istringstream ss(node.args_[0]);
+		uint16_t code;
+		if (!(ss >> code) || !ss.eof() || code < 300 || code > 399 || unknownCode(code)) {
+			logg_.logWithPrefix(Logger::WARNING, "Configuration file",
+			                    "Invalid return status code: " + node.args_[0] + " on line " +
+			                        su::to_string(node.line_));
+			return false;
+		}
+		// Second must be URI or URL
+		if (!isValidUri(node.args_[1]) && !isHttp(node.args_[1])) {
+			logg_.logWithPrefix(Logger::WARNING, "Configuration file",
+			                    "Invalid redirection URI or URL: " + node.args_[1] + " on line " +
+			                        su::to_string(node.line_));
+			return false;
+		}
 		return true;
 	}
-	std::istringstream ss(node.args_[0]);
-	uint16_t code;
-	// first arg: code
-	if (!(ss >> code) || ss.fail() || !ss.eof() || code < 300 || code > 399 || unknownCode(code) ||
-	    node.args_.size() != 2) {
-		logg_.logWithPrefix(Logger::WARNING, "Configuration file",
-		                    "Invalid return status code or URL: " + node.args_[0] + " on line " +
-		                        su::to_string(node.line_));
-		return false;
-	}
-	// second arg : uri or url
-	if (!isValidUri(node.args_[1]) && !isHttp(node.args_[1])) {
-		logg_.logWithPrefix(Logger::WARNING, "Configuration file",
-		                    "redirection URI or URL " + node.args_[1] + " is invalid on line " +
-		                        su::to_string(node.line_));
-		return false;
-	}
-	return true;
+
+	// --- Any other arg count is invalid ---
+	logg_.logWithPrefix(Logger::WARNING, "Configuration file",
+	                    "Invalid number of arguments for return on line " +
+	                        su::to_string(node.line_));
+	return false;
 }
 
 // ERROR: 400 - 599, last arg is file
