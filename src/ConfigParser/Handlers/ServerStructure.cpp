@@ -10,8 +10,8 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-#include "ConfigParser.hpp"
-#include "Struct.hpp"
+#include "src/ConfigParser/ConfigParser.hpp"
+#include "src/ConfigParser/Structs/Struct.hpp"
 
 bool ConfigParser::convertTreeToStruct(const ConfigNode &tree, std::vector<ServerConfig> &servers, std::string &prefix) {
 

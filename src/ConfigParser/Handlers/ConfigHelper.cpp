@@ -10,8 +10,8 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-#include "ConfigParser.hpp"
-#include "Struct.hpp"
+#include "src/ConfigParser/ConfigParser.hpp"
+#include "src/ConfigParser/Structs/Struct.hpp"
 
 
 // Remove comments and trim

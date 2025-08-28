@@ -15,7 +15,7 @@
 
 #include "includes/Webserv.hpp"
 #include "src/CGI/CGI.hpp"
-#include "src/ConfigParser/Struct.hpp"
+#include "src/ConfigParser/Structs/Struct.hpp"
 #include "src/Logger/Logger.hpp"
 #include "src/RequestParser/RequestParser.hpp"
 #include "src/Utils/ArgumentParser.hpp"

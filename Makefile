@@ -55,10 +55,10 @@ SRC_FILES		+= src/RequestParser/Headers.cpp
 SRC_FILES		+= src/RequestParser/Body.cpp
 
 SRC_FILES		+= src/ConfigParser/ConfigParser.cpp
-SRC_FILES		+= src/ConfigParser/ServerStructure.cpp
-SRC_FILES		+= src/ConfigParser/ConfigHelper.cpp
-SRC_FILES		+= src/ConfigParser/ValidDirective.cpp
-SRC_FILES		+= src/ConfigParser/Struct.cpp
+SRC_FILES		+= src/ConfigParser/Handlers/ServerStructure.cpp
+SRC_FILES		+= src/ConfigParser/Handlers/ConfigHelper.cpp
+SRC_FILES		+= src/ConfigParser/Handlers/ValidDirective.cpp
+SRC_FILES		+= src/ConfigParser/Structs/Struct.cpp
 
 SRC_FILES		+= src/Utils/ServerUtils.cpp
 

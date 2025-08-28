@@ -10,7 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-#include "ConfigParser.hpp"
+#include "src/ConfigParser/ConfigParser.hpp"
 
 // Constructor - initialize valid directives
 ConfigParser::ConfigParser(int log_level)

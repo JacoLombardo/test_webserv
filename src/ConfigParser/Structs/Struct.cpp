@@ -12,7 +12,7 @@
 
 
 #include "includes/Webserv.hpp"
-#include "src/ConfigParser/Struct.hpp"
+#include "src/ConfigParser/Structs/Struct.hpp"
 #include "src/Logger/Logger.hpp"
 
 
