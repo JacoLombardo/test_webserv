@@ -17,7 +17,7 @@
 #include "Response.hpp"
 #include "includes/Types.hpp"
 #include "src/ConfigParser/ConfigParser.hpp"
-#include "src/ConfigParser/Struct.hpp"
+#include "src/ConfigParser/Structs/Struct.hpp"
 #include "src/HttpServer/HttpServer.hpp"
 #include "src/Logger/Logger.hpp"
 #include "src/Utils/ServerUtils.hpp"
@@ -81,6 +81,7 @@ class WebServer {
 
 	// MEMBER FUNCTIONS
 
+	public:
 	/* HttpServer.cpp */
 
 	/// Sets up signal handlers for graceful server shutdown.

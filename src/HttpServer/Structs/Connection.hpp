@@ -16,7 +16,7 @@
 #include "Response.hpp"
 #include "includes/Types.hpp"
 #include "includes/Webserv.hpp"
-#include "src/ConfigParser/Struct.hpp"
+#include "src/ConfigParser/Structs/Struct.hpp"
 
 class WebServer;
 class Response;

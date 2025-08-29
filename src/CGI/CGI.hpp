@@ -15,7 +15,7 @@
 
 #include "includes/Webserv.hpp"
 #include "includes/Types.hpp"
-#include "src/ConfigParser/Struct.hpp"
+#include "src/ConfigParser/Structs/Struct.hpp"
 #include "src/Logger/Logger.hpp"
 #include "src/HttpServer/Structs/Response.hpp"
 #include "src/Utils/ServerUtils.hpp"
