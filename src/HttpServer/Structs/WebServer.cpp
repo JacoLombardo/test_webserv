@@ -99,7 +99,7 @@ void WebServer::run() {
 			}
 		}
 
-		cleanupExpiredConnections();
+		ConnectionHandler::cleanupExpiredConnections(this);
 	}
 
 	//for (std::vector<ServerConfig>::iterator it = _confs.begin(); it != _confs.end(); ++it) {
