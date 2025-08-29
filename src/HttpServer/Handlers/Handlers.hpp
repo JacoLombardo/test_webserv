@@ -19,8 +19,7 @@
 #include "src/HttpServer/Structs/WebServer.hpp"
 #include "src/Utils/ServerUtils.hpp"
 
-// One namespace per handler family. These are thin inline forwarders that call
-// the corresponding WebServer member functions. No separate .cpp wrappers.
+// Inline wrappers: namespace functions delegating to WebServer members
 
 namespace EpollEventHandler {
     inline void processEpollEvents(WebServer *server, const struct epoll_event *events, int event_count) { server->processEpollEvents(events, event_count); }
@@ -60,6 +59,7 @@ namespace RequestHandler {
     inline bool parseRequest(WebServer *server, Connection *conn, ClientRequest &req) { return server->parseRequest(conn, req); }
     inline void processRequest(WebServer *server, Connection *conn) { server->processRequest(conn); }
     inline void processValidRequest(WebServer *server, ClientRequest &req, Connection *conn) { server->processValidRequest(req, conn); }
+    inline bool handleCompleteRequest(WebServer *server, Connection *conn) { return server->handleCompleteRequest(conn); }
 }
 
 namespace ReqValidationHandler {
