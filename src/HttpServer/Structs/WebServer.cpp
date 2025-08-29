@@ -91,7 +91,7 @@ void WebServer::run() {
 		}
 
 		if (event_count > 0) {
-			EpollEventHandler::processEpollEvents(this, events, event_count);
+			processEpollEvents(events, event_count);
 			// _lggr.debug("Processed " + su::to_string(event_count) + " events");
 			if (event_count == MAX_EVENTS) {
 				_lggr.warn("Hit MAX_EVENTS limit (" + su::to_string(MAX_EVENTS) +
@@ -99,7 +99,7 @@ void WebServer::run() {
 			}
 		}
 
-		ConnectionHandler::cleanupExpiredConnections(this);
+		cleanupExpiredConnections();
 	}
 
 	//for (std::vector<ServerConfig>::iterator it = _confs.begin(); it != _confs.end(); ++it) {

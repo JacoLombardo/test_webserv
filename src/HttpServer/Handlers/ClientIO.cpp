@@ -14,7 +14,7 @@
 #include "src/HttpServer/Structs/Connection.hpp"
 #include "src/HttpServer/Structs/Response.hpp"
 #include "src/HttpServer/Structs/WebServer.hpp"
-
+ 
 void WebServer::handleClientEvent(int fd, uint32_t event_mask) {
     std::map<int, Connection *>::iterator conn_it = _connections.find(fd);
     if (conn_it != _connections.end()) {
