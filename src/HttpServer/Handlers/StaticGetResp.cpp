@@ -93,13 +93,6 @@ void WebServer::handleFileRequest(ClientRequest &req, Connection *conn, bool end
 	}
 }
 
-
-// struct dirent {
-//     ino_t          d_ino;       // Inode number
-//     char           d_name[256]; // Name of the entry (file or subdirectory)
-//     unsigned char  d_type;      // Type of entry (optional, not always available)
-// };
-
 Response WebServer::generateDirectoryListing(Connection *conn, const std::string &fullDirPath) {
     _lggr.debug("Generating directory listing for: " + fullDirPath);
 

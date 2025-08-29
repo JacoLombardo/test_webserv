@@ -55,7 +55,7 @@ bool WebServer::prepareCGIResponse(CGI *cgi, Connection *conn) {
 		}
 	}
 
-	// close cgi script fd
+	// Close cgi script fd
 	close(cgi->getOutputFd());
 
 	if (bytes_read == -1) {

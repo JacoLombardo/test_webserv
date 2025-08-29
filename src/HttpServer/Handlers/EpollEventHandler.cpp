@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   EpollEventHandler.cpp                              :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: htharrau <htharrau@student.42.fr>          +#+  +:+       +#+        */
+/*   By: jalombar <jalombar@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/08/07 14:06:48 by jalombar          #+#    #+#             */
-/*   Updated: 2025/08/25 14:57:59 by htharrau         ###   ########.fr       */
+/*   Updated: 2025/08/29 09:27:40 by jalombar         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -19,9 +19,6 @@ void WebServer::processEpollEvents(const struct epoll_event *events, int event_c
 	for (int i = 0; i < event_count; ++i) {
 		const uint32_t event_mask = events[i].events;
 		const int fd = events[i].data.fd;
-
-		// _lggr.debug("Epoll event on fd=" + su::to_string(fd) + " (" +
-		//             describeEpollEvents(event_mask) + ")");
 
 		if (isListeningSocket(fd)) {
 			ServerConfig *sc = ServerConfig::find(_confs, fd);
